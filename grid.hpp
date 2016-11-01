@@ -27,6 +27,8 @@ public:
     T interpolate(Vector2d x);
     // accumulate value at world-space position x onto grid
     void addInterpolated(Vector2d x, T value);
+    // From Stomakhin et al. 2013 for use in interpolation
+    double N(double x);
 };
 
 class StaggeredGrid {

@@ -19,8 +19,10 @@ public:
     std::vector<Particle*> particles;
     std::vector<Force*> forces;
     //Structures used for calculations
-    StaggeredGrid vel, velOld, velStar;
+    StaggeredGrid vel, velOld;
+    VectorXd velStar;
     Grid<double> mass;                          //Staggered or regular?
+    int m, n;
     
     Material();
     //Functions
@@ -29,10 +31,10 @@ public:
     void step(double dt);
     void particlesToGrid();
     void gridForces();
-    void updateGridVelocity();
+    void updateGridVelocity(double dt);
     void velocitySolve();
     void updateGradient(double dt);
-    void gridToParticles();
+    void gridToParticles(double dt);
 };
 
 class Force {

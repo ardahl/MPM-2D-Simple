@@ -1,21 +1,19 @@
 #include "material.hpp"
 
 void Material::step(double dt) {
-    //particlesToGrid
+    particlesToGrid()
     velOld = vel;
-    //gridForces
-    //updateGridVelocity
-    //velocitySolve
-    //updateGradient
-    gridToParticles();
+    gridForces();
+    updateGridVelocity(dt);
+    velocitySolve();
+    updateGradient(dt);
+    gridToParticles(dt);
 }
 
 void Material::particlesToGrid() {
     mass.assign(0);
     vel.assign(Vector2d(0,0));
-    velWeight.assign(Vector2d(1e-3,1e-3)); // avoid division by zero
-    // TODO: for each particle, add its velocity to its nearby grid cells.
-    // Use velWeight to determine the weighted average denominator
+    /// velWeight.assign(Vector2d(1e-3,1e-3)); // avoid division by zero
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
         mass.addInterpolated(p->x, p->m);
@@ -40,8 +38,18 @@ void Material::gridForces() {
     
 }
 
-void Material::updateGridVelocity() {
-    
+void Material::updateGridVelocity(double dt) {
+    velStar = VectorXd(3*particles.size());
+    for(int i = 0; i < vel.u.m; i++) {
+        for(int j = 0; j < vel.u.n; j++) {
+            velStar.segment(3*(i+vel.u.m*j), 3) = vel.u(i, j) + dt ;
+        }
+    }
+    for(int i = 0; i < vel.v.m; i++) {
+        for(int j = 0; j < vel.v.n; j++) {
+            
+        }
+    }
 }
 
 void Material::velocitySolve() {
@@ -56,13 +64,16 @@ void Material::updateGradient(double dt) {
     }
 }
 
-void Material::gridToParticles() {
-    // TODO: update particle velocities using vel and velOld grids
+void Material::gridToParticles(double dt) {
     double alpha = 0.95;
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
-		Vector2d pic = vel.interpolate(p->x);
+		//Update velocities
+        Vector2d pic = vel.interpolate(p->x);
 		Vector2d flip = p->v + (vel.interpolate(p->x) - velOld.interpolate(p->x));
 		p->v = (alpha * flip) + ((1 - alpha) * pic);
-	}
+        
+        //Update Positions
+        p->x += dt * p->v;
+    }
 }
