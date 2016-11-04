@@ -21,7 +21,7 @@ class Material {
 public:
     /// trimesh::TriMesh* m;
     std::vector<Particle*> particles;
-    /// std::vector<Force*> forces;
+    std::vector<Force*> forces;
     int m, n;                               //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress
@@ -31,6 +31,7 @@ public:
     Grid<Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
     
     Material(std::string config);
+    Vector2d getExtForces(double dt, int i, int j);    //External forces for grid cell (i, j)
     //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     void getMesh();
@@ -46,7 +47,15 @@ public:
 
 class Force {
 public:
-    virtual void addForces(Material *fluid, double dt) = 0;
+    virtual Vector2d addForces(Material *mat, double dt, int i, int j) = 0;
+};
+
+class Gravity : public Force {
+public:
+    Vector2d g;
+    bool enabled;
+    Gravity(Vector2d g): g(g), enabled(true) {}
+    Vector2d addForces(Material *mat, double dt, int i, int j);
 };
 
 #endif

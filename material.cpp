@@ -15,7 +15,7 @@ Material::Material(std::string config) {
     std::string objFile;
     double pmass, l, w;
     Vector3d c;
-    Vector2d x0;
+    Vector2d x0, grav;
     int resx, resy;
     std::string str;
     while(scn >> str) {
@@ -48,6 +48,9 @@ Material::Material(std::string config) {
         else if(str == "lame") {
             scn >> lambda >> mu;
         }
+        else if(str == "g") {
+            scn >> grav(0) >> grav(1);
+        }
     }
     scn.close();
     
@@ -63,6 +66,8 @@ Material::Material(std::string config) {
     Vector2d xGrid = x0 + Vector2d(h/2,h/2);
     mass = Grid<double>(m, n, xGrid, h);
     vel = velStar = f = Grid<Vector2d>(m, n, xGrid, h);
+    Force* g = new Gravity(grav);
+    forces.push_back(g);
 }
 
 void Material::init() {
@@ -186,7 +191,7 @@ void Material::updateGridVelocities(double dt) {
     velStar.assign(Vector2d(0,0));
     for(int i = 0; i < velStar.m; i++) {
         for(int j = 0; j < velStar.n; j++) {
-            velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j);    ///+ dt * g;
+            velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j) + getExtForces(dt, i, j); //dt*g
             if(velStar(i, j).hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
                 std::cout << velStar(i, j) << std::endl;
@@ -281,4 +286,20 @@ void Material::gridToParticles(double dt) {
             exit(0);
         }
     }
+}
+
+
+Vector2d Material::getExtForces(double dt, int i, int j) {
+    Vector2d force(0, 0);
+    for(int i = 0; i < forces.size(); i++) {
+        force += forces[i]->addForces(this, dt, i, j);
+    }
+    return force;
+}
+
+Vector2d Gravity::addForces(Material *mat, double dt, int i, int j) {
+    if(!enabled) {
+        return Vector2d(0, 0);
+    }
+    return dt * g;
 }
