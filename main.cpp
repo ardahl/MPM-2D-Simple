@@ -1,5 +1,5 @@
 /// #include "mpm.hpp"
-#include "material.hpp"
+#include "mpm.hpp"
 #include "opengl.hpp"
 #include <iostream>
 #include <cstdio>
@@ -10,7 +10,8 @@
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-double seconds = 3, curr = 0;
+int seconds = 3*60, curr = 0;
+bool next = true;
 
 /// cv::Mat img(h, w, CV_8UC3);
 /// cv::Mat flipped(h, w, CV_8UC3);
@@ -29,10 +30,19 @@ void onKey(unsigned char key, int x, int y) {
 		case 27: // escape
 			exit(0);
             break;
+        case 'n':
+            next = true;
+            break;
 	}
 }
 
 void display() {
+    /// if(!next) {
+        /// return;
+    /// }
+    /// else {
+        /// next = false;
+    /// }
     if(curr >= seconds) {
         printf("\nRender Done\n");
         exit(0);
@@ -40,7 +50,9 @@ void display() {
     for(int i = 0; i < 10000; i++) {    //Hardcode for 30fps with dt of (1/3)e-5 
         m->step((1.0/3.0)*0.00001);
     }
-    curr += (1.0/30.0);
+    /// printf("Particle 0 position: (%f, %f)\n", m->particles[0]->x(0), m->particles[0]->x(1));
+    /// curr += (1.0/30.0);
+    curr++;
     
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -62,7 +74,7 @@ void display() {
     for(int i = 0; i < ps.size(); i++) {
         Particle* p = ps[i];
         glColor3f(p->color(0), p->color(1), p->color(2));
-        glVertex3f(p->x(0), p->x(1), p->x(2));
+        glVertex2f(p->x(0), p->x(1));
     }
     glEnd();
     
@@ -71,35 +83,13 @@ void display() {
     /// output << flipped;
     
     glutSwapBuffers();
-    
-    printf("Progress: %f%%\r", curr/seconds);
+    printf("Frame %d/%d\n", curr, seconds);
+    /// printf("Progress: %.2f%%\r", 100.0*(double)curr/seconds);
 }
 
-/// void idle() {
-    /// //FPS
-    /// frame++;
-    /// int time = glutGet(GLUT_ELAPSED_TIME);
-    /// if(time - lastTime > 1000) {
-        /// double fps = frame * 1000.0 / (time-lastTime);
-        /// lastTime = time;
-        /// frame = 0;
-        /// //printf("FPS: %f\n", fps);
-        /// char fpsString[15];
-        /// snprintf(fpsString, 15, "%f", fps);
-        /// glutSetWindowTitle(fpsString);
-    /// }
-    /// ///double timeStep = (time-prevTime) / 1000.0;
-    /// double timeStep = 1e-5;                     //time in seconds
-    /// /*
-     /// * Do a time step
-     /// */
-    /// for(int i = 0; i < 30.0/timeStep; i++) {    //render 30 frames for second
-        
-    /// }
-    /// prevTime = time;
-
-    /// glutPostRedisplay();
-/// }
+void idle() {
+    glutPostRedisplay();
+}
 
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
@@ -108,7 +98,7 @@ int main(int argc, char** argv) {
     glutCreateWindow("Animation");
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
-    /// glutIdleFunc(idle);
+    glutIdleFunc(idle);
     glutKeyboardFunc(onKey);
     
     ///initialize
@@ -119,11 +109,6 @@ int main(int argc, char** argv) {
     ///    save frame using opencv
     
     std::string config = std::string(argv[1]);
-    /// int fps = 30;
-    /// double dt = (1.0/3.0)e-5;
-    /// int itersPerFrame = (int)(1.0/(fps*dt));
-    
-    
     
     /// //use fast 4-byte alignment (default anyway) if possible
     /// glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);

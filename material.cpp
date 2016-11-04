@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <cmath>
 
 Material::Material(std::string config) {
     std::ifstream scn;
@@ -53,11 +54,15 @@ Material::Material(std::string config) {
     //Set up particles at each object vertex
     for(int i = 0; i <= resx; i++) {
         for(int j = 0; j <= resy; j++) {
-            Vector2d pos = x0 + Vector2d(l*(i/resx), w*(j/resy));
+            Vector2d pos = x0 + Vector2d(l*((double)i/resx), w*((double)j/resy));
             Particle* par = new Particle(pos, Vector2d(0,0), c, pmass);
             particles.push_back(par);
         }
     }
+    printf("Number of particles: %d\n", particles.size());
+    Vector2d xGrid = x0 + Vector2d(h/2,h/2);
+    mass = Grid<double>(m, n, xGrid, h);
+    vel = velStar = f = Grid<Vector2d>(m, n, xGrid, h);
 }
 
 void Material::init() {
@@ -128,7 +133,7 @@ void Material::step(double dt) {
  *
  *****************************/  
 void Material::particlesToGrid() {
-    mass.assign(0);
+    mass.assign(1e-3); //prevent divide by 0
     vel.assign(Vector2d(0,0));
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
@@ -178,9 +183,15 @@ void Material::computeGridForces() {
  *      end for
  *****************************/
 void Material::updateGridVelocities(double dt) {
-    for(int i = 0; i < vel.m; i++) {
-        for(int j = 0; j < vel.n; j++) {
+    velStar.assign(Vector2d(0,0));
+    for(int i = 0; i < velStar.m; i++) {
+        for(int j = 0; j < velStar.n; j++) {
             velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j);    ///+ dt * g;
+            if(velStar(i, j).hasNaN()) {
+                printf("velStar NaN at (%d, %d)\n", i, j);
+                std::cout << velStar(i, j) << std::endl;
+                exit(0);
+            }
         }
     }
 }
@@ -202,8 +213,23 @@ void Material::updateGradient(double dt) {
         Matrix2d gradV = Matrix2d::Identity();
         for(int j = velStar.lower(p->x(0)); j < velStar.upper(p->x(0)); j++) {
             for(int k = velStar.lower(p->x(1)); k < velStar.upper(p->x(1)); k++) {
-                gradV += velStar(i, j) * velStar.gradWeight(p->x, i, j).transpose();
+                if(velStar(j, k).hasNaN()) {
+                    printf("gradV velStar has NaN at (%d, %d)\n", j, k);
+                    std::cout << velStar(j, k) << std::endl;
+                    exit(0);
+                }
+                if(velStar.gradWeight(p->x, j, k).transpose().hasNaN()) {
+                    printf("gradV gradW has NaN at (%d, %d)\n", j, k);
+                    std::cout << velStar.gradWeight(p->x, j, k).transpose() << std::endl;
+                    exit(0);
+                }
+                gradV += velStar(j, k) * velStar.gradWeight(p->x, j, k).transpose();
             }
+        }
+        if(gradV.hasNaN()) {
+            printf("gradV has NaN\n");
+            std::cout << gradV << std::endl;
+            exit(0);
         }
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
         p->gradient *= fp;
@@ -234,9 +260,25 @@ void Material::gridToParticles(double dt) {
 		//Update velocities
         Vector2d pic = velStar.interpolate(p->x);
 		Vector2d flip = p->v + (velStar.interpolate(p->x) - vel.interpolate(p->x));
+        if(std::isnan(pic(0)) || std::isnan(pic(1))) {
+            printf("PIC Vel NaN: (%f, %f)\n", pic(0), pic(1));
+            exit(0);
+        }
+        if(std::isnan(flip(0)) || std::isnan(flip(1))) {
+            printf("FLIP Vel NaN: (%f, %f)\n", flip(0), flip(1));
+            exit(0);
+        }
 		p->v = (alpha * flip) + ((1 - alpha) * pic);
+        if(std::isnan(p->v(0)) || std::isnan(p->v(1))) {
+            printf("Vel NaN: (%f, %f)\n", p->v(0), p->v(1));
+            exit(0);
+        }
         
         //Update Positions
         p->x += dt * p->v;
+        if(std::isnan(p->x(0)) || std::isnan(p->x(1))) {
+            printf("PIC Vel NaN: (%f, %f)\n", p->x(0), p->x(1));
+            exit(0);
+        }
     }
 }
