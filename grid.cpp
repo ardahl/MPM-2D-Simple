@@ -12,32 +12,38 @@ void Grid<T>::assign(T value) {
 
 template <typename T>
 T Grid<T>::interpolate(Vector2d x) {
-    /*
-    Vector2d index = (x - x0)/dx;
-    int i = floor(index(0)), j = floor(index(1)); // integer part of index
-    double fi = index(0) - i, fj = index(1) - j;  // fractional part
-    if (i < 0)
-        {i = 0; fi = 0;}
-    else if (i >= m-1)
-        {i = m-2; fi = 1;}
-    if (j < 0)
-        {j = 0; fj = 0;}
-    else if (j >= n-1)
-        {j = n-2; fj = 1;}
-    return
-        + (1-fi)*(1-fj)*get(i,   j)
-        + (  fi)*(1-fj)*get(i+1, j)
-        + (1-fi)*(  fj)*get(i,   j+1)
-        + (  fi)*(  fj)*get(i+1, j+1);
-    */ 
     T val = T(0);
-    for(int i = 0; i < m; i++) {
-        for(int j = 0; j < n; j++) {
-            double w = N(hinv*(x(0)-i*dx)) * N(hinv*(x(1)-j*dx));
-            val += get(i, j) * w;
+    for(int i = lower(x(0)); i < upper(x(0)); i++) {
+        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+            val += get(i, j) * weight(x, i, j);
         }
     }
     return val;
+}
+
+//Need special case for eigen Vector because of initialization to 0
+template<>
+Vector2d Grid<Vector2d>::interpolate(Vector2d x) {
+    Vector2d val = Vector2d::Zero();
+    for(int i = lower(x(0)); i < upper(x(0)); i++) {
+        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+            val += get(i, j) * weight(x, i, j);
+        }
+    }
+    return val;
+}
+
+template <typename T>
+double Grid<T>::weight(Vector2d x, int i, int j) {
+    return N(hinv*(x(0)-i*h)) * N(hinv*(x(1)-j*h));
+}
+
+template <typename T>
+Vector2d Grid<T>::gradWeight(Vector2d x, int i, int j) {
+    Vector2d grad(0, 0);
+    grad(0) = hinv*dN(hinv*(x(0)-i*h))*N(hinv*(x(1)-j*h));
+    grad(1) = hinv*N(hinv*(x(0)-i*h))*dN(hinv*(x(1)-j*h));
+    return grad;
 }
 
 template <typename T>
@@ -53,29 +59,32 @@ double Grid<T>::N(double x) {
 }
 
 template <typename T>
+double Grid<T>::dN(double x) {
+    double ax = abs(x);
+    if(ax >= 0.0 && ax < 1.0) {
+        return 1.5*x*ax - 2.0*x;
+    }
+    else if(ax >= 1.0 && ax < 2.0) {
+        return (-0.5)*x*ax + 2.0*x - 2.0*(x/ax); 
+    }
+    return 0;
+}
+
+template <typename T>
+int Grid<T>::lower(double x) {
+    return std::floor(-2.0 + x/h);
+}
+
+template <typename T>
+int Grid<T>::upper(double x) {
+    return std::ceil(2.0 + x/h);
+}
+
+template <typename T>
 void Grid<T>::addInterpolated(Vector2d x, T value) {
-    /*
-    Vector2d index = (x - x0)/dx;
-    int i = floor(index(0)), j = floor(index(1)); // integer part of index
-    double fi = index(0) - i, fj = index(1) - j;  // fractional part
-    if (i < 0)
-        {i = 0; fi = 0;}
-    else if (i >= m-1)
-        {i = m-2; fi = 1;}
-    if (j < 0)
-        {j = 0; fj = 0;}
-    else if (j >= n-1)
-        {j = n-2; fj = 1;}
-    get(i,   j)   += (1-fi)*(1-fj)*value;
-    get(i+1, j)   += (  fi)*(1-fj)*value;
-    get(i,   j+1) += (1-fi)*(  fj)*value;
-    get(i+1, j+1) += (  fi)*(  fj)*value;
-    */
-    double hinv = 1.0 / dx;
-    for(int i = 0; i < m; i++) {
-        for(int j = 0; j < n; j++) {
-            double w = N(hinv*(x(0)-i*dx)) * N(hinv*(x(1)-j*dx));
-            get(i, j) += w * value;
+    for(int i = lower(x(0)); i < upper(x(0)); i++) {
+        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+            get(i, j) += weight(x, i, j) * value;
         }
     }
 }
@@ -97,3 +106,4 @@ void StaggeredGrid::addInterpolated(Vector2d x, Vector2d value) {
 template class Grid<char>;
 template class Grid<int>;
 template class Grid<double>;
+template class Grid<Vector2d>;

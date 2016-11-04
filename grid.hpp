@@ -11,11 +11,11 @@ class Grid {
 public:
     int m, n;         // number of grid cells
     Vector2d x0;      // world-space position of cell (0, 0)
-    double dx;        // grid cell spacing
+    double h, hinv;        // grid cell spacing and inverse
     std::vector<T> values; // grid cell values
     Grid() {}
     Grid(int m, int n, Vector2d x0, double dx):
-        m(m), n(n), x0(x0), dx(dx), values(m*n) {}
+        m(m), n(n), x0(x0), h(dx), hinv(1.0/dx), values(m*n) {}
     // value at cell (i, j)
     T& get(int i, int j);
     T& operator()(int i, int j) {
@@ -28,7 +28,13 @@ public:
     // accumulate value at world-space position x onto grid
     void addInterpolated(Vector2d x, T value);
     // From Stomakhin et al. 2013 for use in interpolation
+    double weight(Vector2d x, int i, int j);
+    Vector2d gradWeight(Vector2d x, int i, int j);
     double N(double x);
+    double dN(double x);
+    // Gets the index of the lower bounds of the grid
+    int lower(double x);
+    int upper(double x);
 };
 
 class StaggeredGrid {
