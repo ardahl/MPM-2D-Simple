@@ -22,6 +22,7 @@ public:
     /// trimesh::TriMesh* m;
     std::vector<Particle*> particles;
     std::vector<Force*> forces;
+    Vector2d x0;
     int m, n;                               //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress

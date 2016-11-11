@@ -1,4 +1,5 @@
 #include "grid.hpp"
+#include <cmath>
 
 template <typename T>
 T& Grid<T>::get(int i, int j) {
@@ -13,8 +14,8 @@ void Grid<T>::assign(T value) {
 template <typename T>
 T Grid<T>::interpolate(Vector2d x) {
     T val = T(0);
-    for(int i = lower(x(0)); i < upper(x(0)); i++) {
-        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+    for(int i = lower(x(0), 0); i < upper(x(0), 0); i++) {
+        for(int j = lower(x(1), 1); j < upper(x(1), 1); j++) {
             val += get(i, j) * weight(x, i, j);
         }
     }
@@ -25,8 +26,8 @@ T Grid<T>::interpolate(Vector2d x) {
 template<>
 Vector2d Grid<Vector2d>::interpolate(Vector2d x) {
     Vector2d val = Vector2d::Zero();
-    for(int i = lower(x(0)); i < upper(x(0)); i++) {
-        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+    for(int i = lower(x(0), 0); i < upper(x(0), 0); i++) {
+        for(int j = lower(x(1), 1); j < upper(x(1), 1); j++) {
             val += get(i, j) * weight(x, i, j);
         }
     }
@@ -71,19 +72,20 @@ double Grid<T>::dN(double x) {
 }
 
 template <typename T>
-int Grid<T>::lower(double x) {
-    return std::floor(-2.0 + x/h);
+int Grid<T>::lower(double x, int axis) {
+    return std::max(0.0, std::floor(-2.0 + x/h));
 }
 
 template <typename T>
-int Grid<T>::upper(double x) {
-    return std::ceil(2.0 + x/h);
+int Grid<T>::upper(double x, int axis) {
+    double bounds = (axis == 0) ? m : n;
+    return std::min(bounds, std::ceil(2.0 + x/h));
 }
 
 template <typename T>
 void Grid<T>::addInterpolated(Vector2d x, T value) {
-    for(int i = lower(x(0)); i < upper(x(0)); i++) {
-        for(int j = lower(x(1)); j < upper(x(1)); j++) {
+    for(int i = lower(x(0), 0); i < upper(x(0), 0); i++) {
+        for(int j = lower(x(1), 1); j < upper(x(1), 1); j++) {
             get(i, j) += weight(x, i, j) * value;
         }
     }

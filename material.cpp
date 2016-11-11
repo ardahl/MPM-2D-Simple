@@ -15,9 +15,10 @@ Material::Material(std::string config) {
     std::string objFile;
     double pmass, l, w;
     Vector3d c;
-    Vector2d x0, grav;
+    Vector2d object, grav;
     int resx, resy;
     std::string str;
+    x0 = Vector2d(0, 0);
     while(scn >> str) {
         //Ignore empty lines
         if(str == "") {
@@ -31,7 +32,7 @@ Material::Material(std::string config) {
         else if(str == "object") {
             /// scn >> objFile;
             /// m = trimesh::TriMesh::read(objFile);
-            scn >> x0(0) >> x0(1) >> l >> w >> resx >> resy;
+            scn >> object(0) >> object(1) >> l >> w >> resx >> resy;
         }
         else if(str == "dim") {
             scn >> m >> n;
@@ -42,9 +43,9 @@ Material::Material(std::string config) {
         else if(str == "color") {
             scn >> c(0) >> c(1) >> c(2);
         }
-        else if(str == "h") {
-            scn >> h;
-        }
+        /// else if(str == "h") {
+            /// scn >> h;
+        /// }
         else if(str == "lame") {
             scn >> lambda >> mu;
         }
@@ -53,17 +54,21 @@ Material::Material(std::string config) {
         }
     }
     scn.close();
-    
+    h = 1.0/m;      //Grid bounds always to from 0 to 1 so we can set this explicitly
     //Set up particles at each object vertex
     for(int i = 0; i <= resx; i++) {
         for(int j = 0; j <= resy; j++) {
-            Vector2d pos = x0 + Vector2d(l*((double)i/resx), w*((double)j/resy));
+            Vector2d pos = object + Vector2d(l*((double)i/resx), w*((double)j/resy));
             Particle* par = new Particle(pos, Vector2d(0,0), c, pmass);
             particles.push_back(par);
         }
     }
-    printf("Number of particles: %d\n", particles.size());
-    Vector2d xGrid = x0 + Vector2d(h/2,h/2);
+    printf("Number of particles: %d\n", (int)particles.size());
+    printf("Dimentions: %dx%d\n", m, n);
+    printf("Spacing: %f\n", h);
+    printf("Lame Constants: %f, %f\n", lambda, mu);
+    printf("Gravity: (%f, %f)\n", grav(0), grav(1));
+    Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
     mass = Grid<double>(m, n, xGrid, h);
     vel = velStar = f = Grid<Vector2d>(m, n, xGrid, h);
     Force* g = new Gravity(grav);
@@ -90,13 +95,21 @@ void Material::particleVolumesDensities() {
     particlesToGrid();
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
-        for(int j = mass.lower(p->x(0)); j < mass.upper(p->x(0)); j++) {
-            for(int k = mass.lower(p->x(1)); k < mass.upper(p->x(1)); k++) {
+        for(int j = mass.lower(p->x(0), 0); j < mass.upper(p->x(0), 0); j++) {
+            for(int k = mass.lower(p->x(1), 1); k < mass.upper(p->x(1), 1); k++) {
                 p->rho += mass.interpolate(p->x);
             }
         }
         p->rho /= (h*h*h);
+        if(std::isnan(p->rho)) {
+            printf("Paricle %d rho has NaN: %f\n", i, p->rho);
+            exit(0);
+        }
         p->vol = p->m / p->rho;
+        if(std::isnan(p->vol)) {
+            printf("Paricle %d volume has NaN: %f\n", i, p->vol);
+            exit(0);
+        }
     }
 }
 
@@ -104,7 +117,7 @@ void Material::particleVolumesDensities() {
  * Algorithm Process from Stomakhin et al. 2013 and Yue et al. 2015
  * 
  * Compute_Particle_Volumes_And_Densities
- * while not ended
+ * while true
  *      Rasterize_Particle_Data_to_Grid
  *      Compute_Grid_Forces
  *      Update_Grid_Velocities
@@ -138,7 +151,7 @@ void Material::step(double dt) {
  *
  *****************************/  
 void Material::particlesToGrid() {
-    mass.assign(1e-3); //prevent divide by 0
+    mass.assign(1e-6); //prevent divide by 0
     vel.assign(Vector2d(0,0));
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
@@ -148,6 +161,11 @@ void Material::particlesToGrid() {
 	for(int i = 0; i < vel.m; i++) {
 		for(int j = 0; j < vel.n; j++) {
             vel(i, j) /= mass(i, j);
+            if(vel(i, j).hasNaN()) {
+                printf("interpolated vel NaN at (%d, %d)\n", i, j);
+                std::cout << vel(i, j) << std::endl;
+                exit(0);
+            }
 		}
 	}
 }
@@ -173,9 +191,14 @@ void Material::computeGridForces() {
         double J = p->gradient.determinant();
         Matrix2d eps = 0.5 * (p->gradient.transpose() * p->gradient - Matrix2d::Identity());
         Matrix2d stress = lambda*eps.trace()*Matrix2d::Identity() + 2.0*mu*eps;
-        for(int j = f.lower(p->x(0)); j < f.upper(p->x(0)); j++) {
-            for(int k = f.lower(p->x(1)); k < f.upper(p->x(1)); k++) {
-                f(i, j) -= p->vol * J * stress * f.gradWeight(p->x, i, j);
+        for(int j = f.lower(p->x(0), 0); j < f.upper(p->x(0), 0); j++) {
+            for(int k = f.lower(p->x(1), 1); k < f.upper(p->x(1), 1); k++) {
+                f(j, k) -= p->vol * J * stress * f.gradWeight(p->x, j, k);
+                if(f(j, k).hasNaN()) {
+                    printf("f NaN at (%d, %d)\n", j, k);
+                    std::cout << f(j, k) << std::endl;
+                    exit(0);
+                }
             }
         }
     }
@@ -189,9 +212,10 @@ void Material::computeGridForces() {
  *****************************/
 void Material::updateGridVelocities(double dt) {
     velStar.assign(Vector2d(0,0));
+    #pragma omp parallel for collapse(2)
     for(int i = 0; i < velStar.m; i++) {
         for(int j = 0; j < velStar.n; j++) {
-            velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j) + getExtForces(dt, i, j); //dt*g
+            velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j);// + getExtForces(dt, i, j); //dt*g
             if(velStar(i, j).hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
                 std::cout << velStar(i, j) << std::endl;
@@ -213,11 +237,12 @@ void Material::updateGridVelocities(double dt) {
  *      end for
  *****************************/
 void Material::updateGradient(double dt) {
+    #pragma omp parallel for
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
         Matrix2d gradV = Matrix2d::Identity();
-        for(int j = velStar.lower(p->x(0)); j < velStar.upper(p->x(0)); j++) {
-            for(int k = velStar.lower(p->x(1)); k < velStar.upper(p->x(1)); k++) {
+        for(int j = velStar.lower(p->x(0), 0); j < velStar.upper(p->x(0), 0); j++) {
+            for(int k = velStar.lower(p->x(1), 1); k < velStar.upper(p->x(1), 1); k++) {
                 if(velStar(j, k).hasNaN()) {
                     printf("gradV velStar has NaN at (%d, %d)\n", j, k);
                     std::cout << velStar(j, k) << std::endl;
@@ -260,29 +285,34 @@ void Material::updateGradient(double dt) {
  *****************************/
 void Material::gridToParticles(double dt) {
     double alpha = 0.95;
+    #pragma omp parallel for
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
 		//Update velocities
         Vector2d pic = velStar.interpolate(p->x);
 		Vector2d flip = p->v + (velStar.interpolate(p->x) - vel.interpolate(p->x));
-        if(std::isnan(pic(0)) || std::isnan(pic(1))) {
-            printf("PIC Vel NaN: (%f, %f)\n", pic(0), pic(1));
+        if(pic.hasNaN()) {
+            printf("PIC Vel has NaN\n");
+            std::cout << pic << std::endl;
             exit(0);
         }
-        if(std::isnan(flip(0)) || std::isnan(flip(1))) {
-            printf("FLIP Vel NaN: (%f, %f)\n", flip(0), flip(1));
+        if(flip.hasNaN()) {
+            printf("FLIP Vel has NaN\n");
+            std::cout << flip << std::endl;
             exit(0);
         }
 		p->v = (alpha * flip) + ((1 - alpha) * pic);
-        if(std::isnan(p->v(0)) || std::isnan(p->v(1))) {
-            printf("Vel NaN: (%f, %f)\n", p->v(0), p->v(1));
+        if(p->v.hasNaN()) {
+            printf("Vel has NaN\n");
+            std::cout << p->v << std::endl;
             exit(0);
         }
         
         //Update Positions
         p->x += dt * p->v;
-        if(std::isnan(p->x(0)) || std::isnan(p->x(1))) {
-            printf("PIC Vel NaN: (%f, %f)\n", p->x(0), p->x(1));
+        if(p->x.hasNaN()) {
+            printf("Pos has NaN\n");
+            std::cout << p->x << std::endl;
             exit(0);
         }
     }

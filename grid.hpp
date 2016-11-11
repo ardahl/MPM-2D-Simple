@@ -33,8 +33,8 @@ public:
     double N(double x);
     double dN(double x);
     // Gets the index of the lower bounds of the grid
-    int lower(double x);
-    int upper(double x);
+    int lower(double x, int axis);
+    int upper(double x, int axis);
 };
 
 class StaggeredGrid {
