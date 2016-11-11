@@ -1,5 +1,5 @@
 //Uncomment this to remove debug file output
-/// #define NDEBUG
+#define NDEBUG
 
 #include "mpm.hpp"
 #include "opengl.hpp"
@@ -14,7 +14,7 @@
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 3*30, curr = 0;
+int seconds = 5*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -124,7 +124,9 @@ void idle() {
 }
 
 int main(int argc, char** argv) {
+    #ifndef NDEBUG
     debug.open("grad.txt");
+    #endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_MULTISAMPLE);
     glutInitWindowSize(::w, ::h);
