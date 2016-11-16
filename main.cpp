@@ -1,5 +1,5 @@
 //Uncomment this to remove debug file output
-#define NDEBUG
+/// #define NDEBUG
 
 #include "mpm.hpp"
 #include "opengl.hpp"
@@ -14,7 +14,7 @@
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 5*30, curr = 0;
+int seconds = 8*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -66,12 +66,14 @@ void display() {
     printf("\n");
     #ifndef NDEBUG
     //output gradient for debug
-    for(int i = 0; i < m->particles.size(); i++) {
-        Particle* p = m->particles[i];
-        debug << "particle " << i << "\n";
-        debug << p->gradient << "\n";
+    if(curr%30 == 0) {
+        for(int i = 0; i < m->particles.size(); i++) {
+            Particle* p = m->particles[i];
+            debug << "particle " << i << "\n";
+            debug << p->gradient << "\n";
+        }
+        debug << "\n\n";
     }
-    debug << "\n\n";
     #endif
     curr++;
     
