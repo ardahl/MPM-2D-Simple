@@ -1,6 +1,4 @@
-//Uncomment this to remove debug file output
-/// #define NDEBUG
-
+#include "defines.hpp"
 #include "mpm.hpp"
 #include "opengl.hpp"
 #include <iostream>
@@ -10,6 +8,8 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
 #include <opencv2/videoio/videoio.hpp>
+
+using namespace Eigen;
 
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
@@ -22,7 +22,7 @@ cv::Mat flipped(h, w, CV_8UC3);
 cv::VideoWriter output;
 
 #ifndef NDEBUG
-std::ofstream debug;
+extern std::ofstream debug;
 #endif
 Material* m;
 
@@ -59,22 +59,25 @@ void display() {
     }
     //Perform step
     int iters = 1000;
-    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-4 
-        m->step((1.0/3.0)*0.0001);
+    double itersInv = 1.0/(10*iters);
+    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-4
+        /// printf("Step %d\n", i);
+        m->step((1.0/3.0)*itersInv);
         printf("Step: %d/%d\r", i, iters);
     }
     printf("\n");
-    #ifndef NDEBUG
-    //output gradient for debug
-    if(curr%30 == 0) {
-        for(int i = 0; i < m->particles.size(); i++) {
-            Particle* p = m->particles[i];
-            debug << "particle " << i << "\n";
-            debug << p->gradient << "\n";
-        }
-        debug << "\n\n";
-    }
-    #endif
+    
+    /// #ifndef NDEBUG
+    /// //output gradient for debug
+    /// if(curr%30 == 0) {
+        /// for(int i = 0; i < m->particles.size(); i++) {
+            /// Particle* p = m->particles[i];
+            /// debug << "particle " << i << "\n";
+            /// debug << p->gradient << "\n";
+        /// }
+        /// debug << "\n\n";
+    /// }
+    /// #endif
     curr++;
     
     glClearColor(1,1,1,1);
@@ -127,7 +130,7 @@ void idle() {
 
 int main(int argc, char** argv) {
     #ifndef NDEBUG
-    debug.open("grad.txt");
+    debug.open("debugging.txt");
     #endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_MULTISAMPLE);

@@ -1,9 +1,17 @@
+#include "defines.hpp"
 #include "material.hpp"
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <cmath>
+
+using namespace Eigen;
+
+#ifndef NDEBUG
+std::ofstream debug;
+int count = 0;
+#endif
 
 Material::Material(std::string config) {
     std::ifstream scn;
@@ -30,8 +38,6 @@ Material::Material(std::string config) {
             continue;
         }
         else if(str == "object") {
-            /// scn >> objFile;
-            /// m = trimesh::TriMesh::read(objFile);
             scn >> object(0) >> object(1) >> l >> w >> resx >> resy;
         }
         else if(str == "dim") {
@@ -54,11 +60,11 @@ Material::Material(std::string config) {
         }
     }
     scn.close();
-    h = 1.0/m;      //Grid bounds always to from 0 to 1 so we can set this explicitly
+    h = 1.0/m;      //Grid bounds always to from 0 to 1 and square so we can set this explicitly
     //Set up particles at each object vertex
-    for(int i = 0; i <= resx; i++) {
-        for(int j = 0; j <= resy; j++) {
-            Vector2d pos = object + Vector2d(l*((double)i/resx), w*((double)j/resy));
+    for(int i = 0; i <= resx-1; i++) {
+        for(int j = 0; j <= resy-1; j++) {
+            Vector2d pos = object + Vector2d(l*((double)i/(resx-1)), w*((double)j/(resy-1)));
             Particle* par = new Particle(pos, Vector2d(0,0), c, pmass);
             particles.push_back(par);
         }
@@ -93,14 +99,33 @@ void Material::init() {
  *****************************/
 void Material::particleVolumesDensities() {
     particlesToGrid();
+    #ifndef NDEBUG
+    debug << "Mass:\n" << mass << std::endl;
+    IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+    for(int i = 0; i < m; i++) {
+        for(int j = 0; j < n; j++) {
+            debug << "(" << vel(i, j).format(CommaInitFmt) << ")    ";
+        }
+        debug << "\n";
+    }
+    #endif
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
+        if(i % 500 == 0) {
+            //check bounds
+            printf("P: (%f, %f)\n", p->x(0), p->x(1));
+            printf("X Bounds: (%d, %d)\n", mass.lower(p->x(0), 0), mass.upper(p->x(0), 0));
+            printf("Y Bounds: (%d, %d)\n", mass.lower(p->x(1), 1), mass.upper(p->x(1), 1));
+        }
         for(int j = mass.lower(p->x(0), 0); j < mass.upper(p->x(0), 0); j++) {
             for(int k = mass.lower(p->x(1), 1); k < mass.upper(p->x(1), 1); k++) {
-                p->rho += mass.interpolate(p->x);
+                double r = mass(j, k) * mass.weight(p->x, j, k);
+                /// if(r > EPS) {
+                    p->rho += r;
+                /// }
             }
         }
-        p->rho /= (h*h*h);
+        p->rho /= (h*h);            //3D: h*h*h
         if(std::isnan(p->rho)) {
             printf("Paricle %d rho has NaN: %f\n", i, p->rho);
             exit(0);
@@ -110,6 +135,9 @@ void Material::particleVolumesDensities() {
             printf("Paricle %d volume has NaN: %f\n", i, p->vol);
             exit(0);
         }
+        /// #ifndef NDEBUG
+        /// debug << "Particle " << i << ": (rho, " << p->rho << "), (vol, " << p->vol << ")\n";
+        /// #endif
     }
 }
 
@@ -151,23 +179,52 @@ void Material::step(double dt) {
  *
  *****************************/  
 void Material::particlesToGrid() {
-    mass.assign(1e-6); //prevent divide by 0
+    mass.assign(0.0);
     vel.assign(Vector2d(0,0));
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
-        mass.addInterpolated(p->x, p->m);
-		vel.addInterpolated(p->x, p->v * p->m);
+        for(int j = mass.lower(p->x(0), 0); j < mass.upper(p->x(0), 0); j++) {
+            for(int k = mass.lower(p->x(1), 1); k < mass.upper(p->x(1), 1); k++) {
+                mass(j, k) += mass.weight(p->x, j, k) * p->m;
+                vel(j, k) += vel.weight(p->x, j, k) * p->m * p->v;
+            }
+        }
 	}
+    bool not0 = false;
 	for(int i = 0; i < vel.m; i++) {
-		for(int j = 0; j < vel.n; j++) {
-            vel(i, j) /= mass(i, j);
+		for(int j = 0; j < vel.n; j++) {   
+            if(std::abs(mass(i, j)) < EPS) {
+                vel(i, j) = Vector2d(0.0, 0.0);
+            }
+            else {
+                vel(i, j) /= mass(i, j);
+            }
             if(vel(i, j).hasNaN()) {
                 printf("interpolated vel NaN at (%d, %d)\n", i, j);
                 std::cout << vel(i, j) << std::endl;
                 exit(0);
             }
+            #ifndef NDEBUG
+            if(!vel(i, j).isZero(EPS)) {
+                not0 = true;
+            }
+            #endif
 		}
 	}
+    #ifndef NDEBUG
+    IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+    if(not0) {
+        debug << "\nVelocity Non-Zero\n";
+        for(int i = 0; i < vel.m; i++) {
+            for(int j = 0; j < vel.n; j++) { 
+                debug << "(" << vel(i, j).format(CommaInitFmt) << ")   ";
+            }
+            debug << "\n";
+        }
+        debug.close();
+        std::exit(0);
+    }
+    #endif
 }
 
 /******************************
@@ -189,11 +246,38 @@ void Material::computeGridForces() {
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
         double J = p->gradient.determinant();
-        Matrix2d eps = 0.5 * (p->gradient.transpose() * p->gradient - Matrix2d::Identity());
-        Matrix2d stress = lambda*eps.trace()*Matrix2d::Identity() + 2.0*mu*eps;
+        Matrix2d eps = 0.5 * (p->gradient.transpose() * p->gradient - Matrix2d::Identity());    //TODO: Make sure things are correct
+        double trace = eps.trace();
+        /// if(std::abs(trace) < EPS) {
+            /// trace = 0.0;
+        /// }
+        Matrix2d stress = lambda*trace*Matrix2d::Identity() + 2.0*mu*eps;
+        #ifndef NDEBUG
+        if(!stress.isZero(EPS)) {
+            printf("\nStress Not Zero\n");
+            std::cout << p->gradient << std::endl;
+            printf("Eps\n");
+            std::cout << eps << std::endl;
+            printf("Lambda: %f\nTrace: %f\nMu: %f\n", lambda, eps.trace(), mu);
+            std::cout << stress << std::endl;
+            debug.close();
+            std::exit(0);
+        }
+        #endif
+        /// Matrix2d b = p->gradient * p->gradient.transpose();
+        /// Matrix2d bn = std::pow(J, -2.0/3.0) * b;
+        /// Matrix2d devb = bn-(bn.trace()/3.0)*Matrix2d::Identity();
+        /// Matrix2d stress = (1.0/J) * ((lambda/2.0)*(J*J-1)*Matrix2d::Identity() + mu*devb);
         for(int j = f.lower(p->x(0), 0); j < f.upper(p->x(0), 0); j++) {
             for(int k = f.lower(p->x(1), 1); k < f.upper(p->x(1), 1); k++) {
-                f(j, k) -= p->vol * J * stress * f.gradWeight(p->x, j, k);
+                Vector2d accumF = p->vol * J * stress * f.gradWeight(p->x, j, k);
+                /// if(std::abs(accumF(0)) < EPS) {
+                    /// accumF(0) = 0.0;
+                /// }
+                /// if(std::abs(accumF(1)) < EPS) {
+                    /// accumF(1) = 0.0;
+                /// }
+                f(j, k) -= accumF;
                 if(f(j, k).hasNaN()) {
                     printf("f NaN at (%d, %d)\n", j, k);
                     std::cout << f(j, k) << std::endl;
@@ -201,28 +285,76 @@ void Material::computeGridForces() {
                 }
             }
         }
+        #ifndef NDEBUG
+        bool not0 = false;
+        for(int j = 0; j < m; j++) {
+            for(int k = 0; k < n; k++) {
+                if(!f(j, k).isZero(EPS)) {
+                    not0 = true;
+                    break;
+                }
+            }
+            if(not0) break;
+        }
+        if(not0) {
+            debug << "Forces:\n";
+            IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+            for(int j = 0; j < m; j++) {
+                for(int k = 0; k < n; k++) {
+                    debug << "(" << f(j, k).format(CommaInitFmt) << ")   ";
+                }
+                debug << "\n";
+            }
+            debug.close();
+            std::exit(0);
+        }
+        #endif
     }
 }
 
 /******************************
  * Update_Grid_Velocities
  *      for each grid node i do
- *          v^*_i = (dt * f_i)/m_i + dt * g
+ *          v^*_i = v_i^n + (dt * f_i)/m_i + dt * g
  *      end for
  *****************************/
 void Material::updateGridVelocities(double dt) {
-    velStar.assign(Vector2d(0,0));
-    #pragma omp parallel for collapse(2)
+    bool not0 = false;
+    /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < velStar.m; i++) {
         for(int j = 0; j < velStar.n; j++) {
-            velStar(i, j) = dt * (1.0/mass(i, j)) * f(i, j);// + getExtForces(dt, i, j); //dt*g
+            if(std::abs(mass(i, j)) < EPS) {
+                velStar(i, j) = Vector2d(0.0, 0.0);
+            }
+            else {
+                velStar(i, j) = vel(i, j) + dt * (1.0/mass(i, j)) * f(i, j);// + getExtForces(dt, i, j); //dt*g
+            }
             if(velStar(i, j).hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
                 std::cout << velStar(i, j) << std::endl;
                 exit(0);
             }
+            #ifndef NDEBUG
+            if(!velStar(i, j).isZero(EPS)) {
+                not0 = true;
+            }
+            #endif
         }
     }
+    #ifndef NDEBUG
+    if(not0) {
+        IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+        debug << "VelStar:\n";
+        for(int i = 0; i < velStar.m; i++) {
+            for(int j = 0; j < velStar.n; j++) {
+                debug << "(" << velStar(i, j).format(CommaInitFmt) << ")   ";
+            }
+            debug << "\n";
+        }
+        debug.close();
+        std::exit(0);
+    }
+    #endif
 }
 
 /******************************
@@ -237,10 +369,10 @@ void Material::updateGridVelocities(double dt) {
  *      end for
  *****************************/
 void Material::updateGradient(double dt) {
-    #pragma omp parallel for
+    /// #pragma omp parallel for
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
-        Matrix2d gradV = Matrix2d::Identity();
+        Matrix2d gradV = Matrix2d::Zero();
         for(int j = velStar.lower(p->x(0), 0); j < velStar.upper(p->x(0), 0); j++) {
             for(int k = velStar.lower(p->x(1), 1); k < velStar.upper(p->x(1), 1); k++) {
                 if(velStar(j, k).hasNaN()) {
@@ -253,7 +385,17 @@ void Material::updateGradient(double dt) {
                     std::cout << velStar.gradWeight(p->x, j, k).transpose() << std::endl;
                     exit(0);
                 }
-                gradV += velStar(j, k) * velStar.gradWeight(p->x, j, k).transpose();
+                
+                Matrix2d accumGrad = velStar(j, k) * velStar.gradWeight(p->x, j, k).transpose();
+                //Set values below eps to 0
+                /// for(int a = 0; a < accumGrad.rows(); a++) {
+                    /// for(int b = 0; b < accumGrad.cols(); b++) {
+                        /// if(std::abs(accumGrad(a, b)) < EPS) {
+                            /// accumGrad(a, b) = 0.0;
+                        /// }
+                    /// }
+                /// }
+                gradV += accumGrad;
             }
         }
         if(gradV.hasNaN()) {
@@ -261,8 +403,32 @@ void Material::updateGradient(double dt) {
             std::cout << gradV << std::endl;
             exit(0);
         }
+        #ifndef NDEBUG
+        /// for(int a = 0; a < gradV.rows(); a++) {
+            /// for(int b = 0; b < gradV.cols(); b++) {
+                /// if(std::abs(gradV(a, b)) < EPS) {
+                    /// gradV(a, b) = 0.0;
+                /// }
+            /// }
+        /// }
+        IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+        if(!gradV.isZero(EPS)) {
+            debug << "GradV:\n" << gradV.format(CommaInitFmt) << "\n";
+            debug.close();
+            std::exit(0);
+        }
+        #endif
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
+        /// fp = Matrix2d::Identity() + fp;
         p->gradient *= fp;
+        #ifndef NDEBUG
+        if(!p->gradient.isIdentity(EPS)) {
+            debug << "Gradient " << i << ": " << p->gradient.format(CommaInitFmt) << "\n";
+            debug << "fp: " << fp.format(CommaInitFmt) << "\n";
+            debug.close();
+            std::exit(0);
+        }
+        #endif
     }
 }
 
@@ -285,14 +451,36 @@ void Material::updateGradient(double dt) {
  *****************************/
 void Material::gridToParticles(double dt) {
     double alpha = 0.95;
-    #pragma omp parallel for
+    /// #pragma omp parallel for
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
 		//Update velocities
-        Vector2d pic = velStar.interpolate(p->x);
-		Vector2d flip = p->v + (velStar.interpolate(p->x) - vel.interpolate(p->x));
+        Vector2d pic = Vector2d::Zero();
+        Vector2d flip = Vector2d::Zero();
+        Vector2d tmpPic, tmpFlip;
+        for(int j = velStar.lower(p->x(0), 0); j < velStar.upper(p->x(0), 0); j++) {
+            for(int k = velStar.lower(p->x(1), 1); k < velStar.upper(p->x(1), 1); k++) {
+                tmpPic = velStar.weight(p->x, j, k) * velStar(j, k);
+                /// if(std::abs(tmpPic(0)) < EPS) {
+                    /// tmpPic(0) = 0.0;
+                /// }
+                /// if(std::abs(tmpPic(1)) < EPS) {
+                    /// tmpPic(1) = 0.0;
+                /// }
+                pic += tmpPic;
+                
+                tmpFlip = velStar.weight(p->x, j, k) * (velStar(j, k) - vel(j, k));
+                /// if(std::abs(tmpFlip(0)) < EPS) {
+                    /// tmpFlip(0) = 0.0;
+                /// }
+                /// if(std::abs(tmpFlip(1)) < EPS) {
+                    /// tmpFlip(1) = 0.0;
+                /// }
+                flip += tmpFlip;
+            }
+        }
         if(pic.hasNaN()) {
-            printf("PIC Vel has NaN\n");
+            printf("\n\nPIC Vel has NaN\n");
             std::cout << pic << std::endl;
             exit(0);
         }
@@ -302,6 +490,15 @@ void Material::gridToParticles(double dt) {
             exit(0);
         }
 		p->v = (alpha * flip) + ((1 - alpha) * pic);
+        #ifndef NDEBUG
+        if(!p->v.isZero(EPS)) {
+            debug << "PIC:\n" << pic << "\n\n";
+            debug << "FLIP:\n" << flip << "\n\n";
+            debug << "Result:\n" << p->v << "\n";
+            debug.close();
+            std::exit(0);
+        }
+        #endif
         if(p->v.hasNaN()) {
             printf("Vel has NaN\n");
             std::cout << p->v << std::endl;

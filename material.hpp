@@ -2,40 +2,39 @@
 #define MATERIAL_HPP_
 
 #include "grid.hpp"
-/// #include "trimesh2/include/TriMesh.h"
 
 class Force;
 
 class Particle {
 public:
-    Vector2d x, v;      //postition, velocity
-    Vector3d color;     
+    Eigen::Vector2d x, v;      //postition, velocity
+    Eigen::Vector3d color;     
     double m;           //mass
-    Matrix2d gradient;  //deformation gradient
+    Eigen::Matrix2d gradient;  //deformation gradient
     double rho;         //density
     double vol;         //volume
-    Particle(Vector2d x, Vector2d v, Vector3d color, double m): x(x), v(v), color(color), m(m), gradient(Matrix2d::Identity()), rho(0), vol(0) {}
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
 };
 
 class Material {
 public:
-    /// trimesh::TriMesh* m;
     std::vector<Particle*> particles;
     std::vector<Force*> forces;
-    Vector2d x0;
+    Eigen::Vector2d x0;
     int m, n;                               //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress
     //Structures used for calculations
     Grid<double> mass;
     //No pressure projection, so no staggered grid needed
-    Grid<Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
+    Grid<Eigen::Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
     
     Material(std::string config);
-    Vector2d getExtForces(double dt, int i, int j);    //External forces for grid cell (i, j)
+    Eigen::Vector2d getExtForces(double dt, int i, int j);    //External forces for grid cell (i, j)
     //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     void getMesh();
+    //Perform a step of length dt
     void step(double dt);
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities
     void particlesToGrid();                 //Rasterize_Particle_Data_To_Grid
@@ -48,15 +47,15 @@ public:
 
 class Force {
 public:
-    virtual Vector2d addForces(Material *mat, double dt, int i, int j) = 0;
+    virtual Eigen::Vector2d addForces(Material *mat, double dt, int i, int j) = 0;
 };
 
 class Gravity : public Force {
 public:
-    Vector2d g;
+    Eigen::Vector2d g;
     bool enabled;
-    Gravity(Vector2d g): g(g), enabled(true) {}
-    Vector2d addForces(Material *mat, double dt, int i, int j);
+    Gravity(Eigen::Vector2d g): g(g), enabled(true) {}
+    Eigen::Vector2d addForces(Material *mat, double dt, int i, int j);
 };
 
 #endif

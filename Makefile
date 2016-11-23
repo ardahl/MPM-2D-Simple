@@ -9,7 +9,7 @@ else # Linux?
 	LDFLAGS := -lglut -lGLU -lGL -fopenmp `pkg-config --libs opencv`
 endif
 
-OBJ := sparse.o grid.o material.o main.o
+OBJ := grid.o material.o main.o
 
 mpm: $(OBJ)
 	$(CXX) $^ -o $@ $(LDFLAGS)
