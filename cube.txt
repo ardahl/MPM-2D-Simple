@@ -1,7 +1,7 @@
 #object x y l w resx resy
-object 0.4 0.4 0.3 0.3 25 25
+object 0.4 0.4 0.3 0.3 35 35
 #dim x y. Currently m and n need to be equal
-dim 20 20
+dim 100 100
 #max m (per particle)
 mass 1
 #color r g b
@@ -11,4 +11,4 @@ color 1 0 0
 #lame lambda mu
 lame 1 1
 #g x y (gravity)
-g 0 -1
+g 0 -9.8

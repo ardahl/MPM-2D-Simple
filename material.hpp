@@ -18,6 +18,7 @@ public:
 
 class Material {
 public:
+    int stepNum;
     std::vector<Particle*> particles;
     std::vector<Force*> forces;
     Eigen::Vector2d x0;
@@ -30,7 +31,7 @@ public:
     Grid<Eigen::Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
     
     Material(std::string config);
-    Eigen::Vector2d getExtForces(double dt, int i, int j);    //External forces for grid cell (i, j)
+    Eigen::Vector2d getExtForces(int i, int j);    //External forces for grid cell (i, j)
     //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     void getMesh();
@@ -47,7 +48,7 @@ public:
 
 class Force {
 public:
-    virtual Eigen::Vector2d addForces(Material *mat, double dt, int i, int j) = 0;
+    virtual Eigen::Vector2d addForces(Material *mat, int i, int j) = 0;
 };
 
 class Gravity : public Force {
@@ -55,7 +56,7 @@ public:
     Eigen::Vector2d g;
     bool enabled;
     Gravity(Eigen::Vector2d g): g(g), enabled(true) {}
-    Eigen::Vector2d addForces(Material *mat, double dt, int i, int j);
+    Eigen::Vector2d addForces(Material *mat, int i, int j);
 };
 
 #endif

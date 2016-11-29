@@ -14,6 +14,7 @@ int count = 0;
 #endif
 
 Material::Material(std::string config) {
+    stepNum = 0;
     std::ifstream scn;
     scn.open(config);
     if(scn.fail()) {
@@ -102,6 +103,7 @@ void Material::particleVolumesDensities() {
     #ifndef NDEBUG
     debug << "Mass:\n" << mass << std::endl;
     IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
+    debug << "Vel:\n";
     for(int i = 0; i < m; i++) {
         for(int j = 0; j < n; j++) {
             debug << "(" << vel(i, j).format(CommaInitFmt) << ")    ";
@@ -111,18 +113,10 @@ void Material::particleVolumesDensities() {
     #endif
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
-        if(i % 500 == 0) {
-            //check bounds
-            printf("P: (%f, %f)\n", p->x(0), p->x(1));
-            printf("X Bounds: (%d, %d)\n", mass.lower(p->x(0), 0), mass.upper(p->x(0), 0));
-            printf("Y Bounds: (%d, %d)\n", mass.lower(p->x(1), 1), mass.upper(p->x(1), 1));
-        }
-        for(int j = mass.lower(p->x(0), 0); j < mass.upper(p->x(0), 0); j++) {
-            for(int k = mass.lower(p->x(1), 1); k < mass.upper(p->x(1), 1); k++) {
+        for(int j = mass.lower(p->x, 0); j < mass.upper(p->x, 0); j++) {
+            for(int k = mass.lower(p->x, 1); k < mass.upper(p->x, 1); k++) {
                 double r = mass(j, k) * mass.weight(p->x, j, k);
-                /// if(r > EPS) {
-                    p->rho += r;
-                /// }
+                p->rho += r;
             }
         }
         p->rho /= (h*h);            //3D: h*h*h
@@ -159,6 +153,7 @@ void Material::step(double dt) {
     updateGridVelocities(dt);
     updateGradient(dt);
     gridToParticles(dt);
+    stepNum++;
 }
 
 /******************************
@@ -183,14 +178,13 @@ void Material::particlesToGrid() {
     vel.assign(Vector2d(0,0));
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
-        for(int j = mass.lower(p->x(0), 0); j < mass.upper(p->x(0), 0); j++) {
-            for(int k = mass.lower(p->x(1), 1); k < mass.upper(p->x(1), 1); k++) {
+        for(int j = mass.lower(p->x, 0); j < mass.upper(p->x, 0); j++) {
+            for(int k = mass.lower(p->x, 1); k < mass.upper(p->x, 1); k++) {
                 mass(j, k) += mass.weight(p->x, j, k) * p->m;
                 vel(j, k) += vel.weight(p->x, j, k) * p->m * p->v;
             }
         }
 	}
-    bool not0 = false;
 	for(int i = 0; i < vel.m; i++) {
 		for(int j = 0; j < vel.n; j++) {   
             if(std::abs(mass(i, j)) < EPS) {
@@ -204,27 +198,8 @@ void Material::particlesToGrid() {
                 std::cout << vel(i, j) << std::endl;
                 exit(0);
             }
-            #ifndef NDEBUG
-            if(!vel(i, j).isZero(EPS)) {
-                not0 = true;
-            }
-            #endif
 		}
 	}
-    #ifndef NDEBUG
-    IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
-    if(not0) {
-        debug << "\nVelocity Non-Zero\n";
-        for(int i = 0; i < vel.m; i++) {
-            for(int j = 0; j < vel.n; j++) { 
-                debug << "(" << vel(i, j).format(CommaInitFmt) << ")   ";
-            }
-            debug << "\n";
-        }
-        debug.close();
-        std::exit(0);
-    }
-    #endif
 }
 
 /******************************
@@ -248,35 +223,14 @@ void Material::computeGridForces() {
         double J = p->gradient.determinant();
         Matrix2d eps = 0.5 * (p->gradient.transpose() * p->gradient - Matrix2d::Identity());    //TODO: Make sure things are correct
         double trace = eps.trace();
-        /// if(std::abs(trace) < EPS) {
-            /// trace = 0.0;
-        /// }
         Matrix2d stress = lambda*trace*Matrix2d::Identity() + 2.0*mu*eps;
-        #ifndef NDEBUG
-        if(!stress.isZero(EPS)) {
-            printf("\nStress Not Zero\n");
-            std::cout << p->gradient << std::endl;
-            printf("Eps\n");
-            std::cout << eps << std::endl;
-            printf("Lambda: %f\nTrace: %f\nMu: %f\n", lambda, eps.trace(), mu);
-            std::cout << stress << std::endl;
-            debug.close();
-            std::exit(0);
-        }
-        #endif
         /// Matrix2d b = p->gradient * p->gradient.transpose();
         /// Matrix2d bn = std::pow(J, -2.0/3.0) * b;
         /// Matrix2d devb = bn-(bn.trace()/3.0)*Matrix2d::Identity();
         /// Matrix2d stress = (1.0/J) * ((lambda/2.0)*(J*J-1)*Matrix2d::Identity() + mu*devb);
-        for(int j = f.lower(p->x(0), 0); j < f.upper(p->x(0), 0); j++) {
-            for(int k = f.lower(p->x(1), 1); k < f.upper(p->x(1), 1); k++) {
+        for(int j = f.lower(p->x, 0); j < f.upper(p->x, 0); j++) {
+            for(int k = f.lower(p->x, 1); k < f.upper(p->x, 1); k++) {
                 Vector2d accumF = p->vol * J * stress * f.gradWeight(p->x, j, k);
-                /// if(std::abs(accumF(0)) < EPS) {
-                    /// accumF(0) = 0.0;
-                /// }
-                /// if(std::abs(accumF(1)) < EPS) {
-                    /// accumF(1) = 0.0;
-                /// }
                 f(j, k) -= accumF;
                 if(f(j, k).hasNaN()) {
                     printf("f NaN at (%d, %d)\n", j, k);
@@ -285,30 +239,6 @@ void Material::computeGridForces() {
                 }
             }
         }
-        #ifndef NDEBUG
-        bool not0 = false;
-        for(int j = 0; j < m; j++) {
-            for(int k = 0; k < n; k++) {
-                if(!f(j, k).isZero(EPS)) {
-                    not0 = true;
-                    break;
-                }
-            }
-            if(not0) break;
-        }
-        if(not0) {
-            debug << "Forces:\n";
-            IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
-            for(int j = 0; j < m; j++) {
-                for(int k = 0; k < n; k++) {
-                    debug << "(" << f(j, k).format(CommaInitFmt) << ")   ";
-                }
-                debug << "\n";
-            }
-            debug.close();
-            std::exit(0);
-        }
-        #endif
     }
 }
 
@@ -319,42 +249,22 @@ void Material::computeGridForces() {
  *      end for
  *****************************/
 void Material::updateGridVelocities(double dt) {
-    bool not0 = false;
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < velStar.m; i++) {
         for(int j = 0; j < velStar.n; j++) {
             if(std::abs(mass(i, j)) < EPS) {
-                velStar(i, j) = Vector2d(0.0, 0.0);
+                velStar(i, j) = vel(i, j) + dt * getExtForces(i, j);
             }
             else {
-                velStar(i, j) = vel(i, j) + dt * (1.0/mass(i, j)) * f(i, j);// + getExtForces(dt, i, j); //dt*g
+                velStar(i, j) = vel(i, j) + dt * (1.0/mass(i, j)) * f(i, j) + dt * getExtForces(i, j); //dt*g
             }
             if(velStar(i, j).hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
                 std::cout << velStar(i, j) << std::endl;
                 exit(0);
             }
-            #ifndef NDEBUG
-            if(!velStar(i, j).isZero(EPS)) {
-                not0 = true;
-            }
-            #endif
         }
     }
-    #ifndef NDEBUG
-    if(not0) {
-        IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
-        debug << "VelStar:\n";
-        for(int i = 0; i < velStar.m; i++) {
-            for(int j = 0; j < velStar.n; j++) {
-                debug << "(" << velStar(i, j).format(CommaInitFmt) << ")   ";
-            }
-            debug << "\n";
-        }
-        debug.close();
-        std::exit(0);
-    }
-    #endif
 }
 
 /******************************
@@ -373,8 +283,8 @@ void Material::updateGradient(double dt) {
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
         Matrix2d gradV = Matrix2d::Zero();
-        for(int j = velStar.lower(p->x(0), 0); j < velStar.upper(p->x(0), 0); j++) {
-            for(int k = velStar.lower(p->x(1), 1); k < velStar.upper(p->x(1), 1); k++) {
+        for(int j = velStar.lower(p->x, 0); j < velStar.upper(p->x, 0); j++) {
+            for(int k = velStar.lower(p->x, 1); k < velStar.upper(p->x, 1); k++) {
                 if(velStar(j, k).hasNaN()) {
                     printf("gradV velStar has NaN at (%d, %d)\n", j, k);
                     std::cout << velStar(j, k) << std::endl;
@@ -387,14 +297,6 @@ void Material::updateGradient(double dt) {
                 }
                 
                 Matrix2d accumGrad = velStar(j, k) * velStar.gradWeight(p->x, j, k).transpose();
-                //Set values below eps to 0
-                /// for(int a = 0; a < accumGrad.rows(); a++) {
-                    /// for(int b = 0; b < accumGrad.cols(); b++) {
-                        /// if(std::abs(accumGrad(a, b)) < EPS) {
-                            /// accumGrad(a, b) = 0.0;
-                        /// }
-                    /// }
-                /// }
                 gradV += accumGrad;
             }
         }
@@ -403,32 +305,8 @@ void Material::updateGradient(double dt) {
             std::cout << gradV << std::endl;
             exit(0);
         }
-        #ifndef NDEBUG
-        /// for(int a = 0; a < gradV.rows(); a++) {
-            /// for(int b = 0; b < gradV.cols(); b++) {
-                /// if(std::abs(gradV(a, b)) < EPS) {
-                    /// gradV(a, b) = 0.0;
-                /// }
-            /// }
-        /// }
-        IOFormat CommaInitFmt(StreamPrecision, DontAlignCols, ", ", ", ", "", "", "", "");
-        if(!gradV.isZero(EPS)) {
-            debug << "GradV:\n" << gradV.format(CommaInitFmt) << "\n";
-            debug.close();
-            std::exit(0);
-        }
-        #endif
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
-        /// fp = Matrix2d::Identity() + fp;
-        p->gradient *= fp;
-        #ifndef NDEBUG
-        if(!p->gradient.isIdentity(EPS)) {
-            debug << "Gradient " << i << ": " << p->gradient.format(CommaInitFmt) << "\n";
-            debug << "fp: " << fp.format(CommaInitFmt) << "\n";
-            debug.close();
-            std::exit(0);
-        }
-        #endif
+        p->gradient = fp*p->gradient;
     }
 }
 
@@ -436,7 +314,7 @@ void Material::updateGradient(double dt) {
  * Update_Particle_Velocities
  *      for each particle p do
  *          v_pic = 0
- *          v_flip = 0
+ *          v_flip = v_p
  *          for all grid cells i s.t. w_ip > 0
  *              v_pic += w_ip * v^*_i
  *              v_flip += w_ip * (v^*_i - v_i)
@@ -452,30 +330,34 @@ void Material::updateGradient(double dt) {
 void Material::gridToParticles(double dt) {
     double alpha = 0.95;
     /// #pragma omp parallel for
+    #ifndef NDEBUG
+    debug << "Vel\n";
+    for(int i = 0; i < m; i++) {
+        for(int j = 0; j < n; j++) {
+            debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
+        }
+        debug << "\n";
+    }
+    debug << "\nVelStar\n";
+    for(int i = 0; i < m; i++) {
+        for(int j = 0; j < n; j++) {
+            debug << "(" << velStar(i, j)(0) << ", " << velStar(i, j)(1) << ")  ";
+        }
+        debug << "\n";
+    }
+    #endif
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
 		//Update velocities
         Vector2d pic = Vector2d::Zero();
-        Vector2d flip = Vector2d::Zero();
+        Vector2d flip = p->v;
         Vector2d tmpPic, tmpFlip;
-        for(int j = velStar.lower(p->x(0), 0); j < velStar.upper(p->x(0), 0); j++) {
-            for(int k = velStar.lower(p->x(1), 1); k < velStar.upper(p->x(1), 1); k++) {
+        for(int j = velStar.lower(p->x, 0); j < velStar.upper(p->x, 0); j++) {
+            for(int k = velStar.lower(p->x, 1); k < velStar.upper(p->x, 1); k++) {
                 tmpPic = velStar.weight(p->x, j, k) * velStar(j, k);
-                /// if(std::abs(tmpPic(0)) < EPS) {
-                    /// tmpPic(0) = 0.0;
-                /// }
-                /// if(std::abs(tmpPic(1)) < EPS) {
-                    /// tmpPic(1) = 0.0;
-                /// }
                 pic += tmpPic;
                 
                 tmpFlip = velStar.weight(p->x, j, k) * (velStar(j, k) - vel(j, k));
-                /// if(std::abs(tmpFlip(0)) < EPS) {
-                    /// tmpFlip(0) = 0.0;
-                /// }
-                /// if(std::abs(tmpFlip(1)) < EPS) {
-                    /// tmpFlip(1) = 0.0;
-                /// }
                 flip += tmpFlip;
             }
         }
@@ -489,21 +371,18 @@ void Material::gridToParticles(double dt) {
             std::cout << flip << std::endl;
             exit(0);
         }
-		p->v = (alpha * flip) + ((1 - alpha) * pic);
         #ifndef NDEBUG
-        if(!p->v.isZero(EPS)) {
-            debug << "PIC:\n" << pic << "\n\n";
-            debug << "FLIP:\n" << flip << "\n\n";
-            debug << "Result:\n" << p->v << "\n";
-            debug.close();
-            std::exit(0);
-        }
+        debug << "Particle " << i << " PIC: (" << pic(0) << ", " << pic(1) << "), FLIP: (" << flip(0) << ", " << flip(1) << ")\n";
         #endif
+		p->v = (alpha * flip) + ((1 - alpha) * pic);
         if(p->v.hasNaN()) {
             printf("Vel has NaN\n");
             std::cout << p->v << std::endl;
             exit(0);
         }
+        #ifndef NDEBUG
+        debug << "Particle " << i << " Vel: (" << p->v(0) << ", " << p->v(1) << ")\n";
+        #endif
         
         //Update Positions
         p->x += dt * p->v;
@@ -512,21 +391,52 @@ void Material::gridToParticles(double dt) {
             std::cout << p->x << std::endl;
             exit(0);
         }
+        
+        //Boundary collisions
+        //Make sure there's a boundary of 2 cells for each side since the weighting
+        //function will touch 2 cells out
+        double lx = x0(0)+2*h;
+        double ly = x0(1)+2*h;
+        double ux = x0(0)+(m-2)*h;
+        double uy = x0(1)+(n-2)*h;
+        if(p->x(0) < lx) {
+            p->x(0) = lx+EPS;
+            p->v(0) *= -1;          //reverse velocity
+        }
+        if(p->x(1) < ly) {
+            p->x(1) = ly+EPS;
+            p->v(1) *= -1;
+        }
+        if(p->x(0) > ux) {
+            p->x(0) = ux-EPS;
+            p->v(0) *= -1;
+        }
+        if(p->x(1) > uy) {
+            p->x(1) = uy-EPS;
+            p->v(1) *= -1;
+        }
     }
+    #ifndef NDEBUG
+    debug << "\n";
+    if(stepNum == 3) {
+        debug.close();
+        std::exit(0);
+    }
+    #endif
 }
 
 
-Vector2d Material::getExtForces(double dt, int i, int j) {
+Vector2d Material::getExtForces(int i, int j) {
     Vector2d force(0, 0);
     for(int i = 0; i < forces.size(); i++) {
-        force += forces[i]->addForces(this, dt, i, j);
+        force += forces[i]->addForces(this, i, j);
     }
     return force;
 }
 
-Vector2d Gravity::addForces(Material *mat, double dt, int i, int j) {
+Vector2d Gravity::addForces(Material *mat, int i, int j) {
     if(!enabled) {
         return Vector2d(0, 0);
     }
-    return dt * g;
+    return g;
 }

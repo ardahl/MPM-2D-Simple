@@ -50,7 +50,8 @@ void display() {
     /// else {
         /// next = false;
     /// }
-    if(curr >= seconds) {
+    curr++;
+    if(curr > seconds) {
         printf("\nRender Done\n");
         #ifndef NDEBUG
         debug.close();
@@ -63,7 +64,7 @@ void display() {
     for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-4
         /// printf("Step %d\n", i);
         m->step((1.0/3.0)*itersInv);
-        printf("Step: %d/%d\r", i, iters);
+        printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
     }
     printf("\n");
     
@@ -78,7 +79,6 @@ void display() {
         /// debug << "\n\n";
     /// }
     /// #endif
-    curr++;
     
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -94,7 +94,7 @@ void display() {
      */
     //Draw grid structure
     glColor3f(0.8, 0.8, 0.8);
-    glPointSize(10);
+    glPointSize(6);
     for (int i = 0; i < m->m; i++) {
         for (int j = 0; j < m->n; j++) {
             Vector2d x = m->x0 + Vector2d(i+0.5, j+0.5)*m->h;
@@ -120,8 +120,7 @@ void display() {
     output << flipped;
     
     glutSwapBuffers();
-    printf("Frame %d/%d\n", curr, seconds);
-    /// printf("Progress: %.2f%%\r", 100.0*(double)curr/seconds);
+    /// printf("Frame %d/%d\n", curr, seconds);
 }
 
 void idle() {
