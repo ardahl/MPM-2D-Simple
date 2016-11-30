@@ -16,10 +16,12 @@ void Grid<T>::assign(T value) {
     values.assign(values.size(), value);
 }
 
+//Test weight. Put positions of grid cells in world space on the grid and interpolate
+//to particles and see if the particle position is recovered
+//Ask if higher order interpolation should indeed recover the exact values
 template <typename T>
 double Grid<T>::weight(Vector2d x, int i, int j) {
     double w = N(hinv*(x(0)-i*h)) * N(hinv*(x(1)-j*h));
-    /// return (w < EPS) ? 0.0 : w;
     return w;
 }
 
@@ -27,13 +29,7 @@ template <typename T>
 Vector2d Grid<T>::gradWeight(Vector2d x, int i, int j) {
     Vector2d grad(0.0, 0.0);
     grad(0) = hinv*dN(hinv*(x(0)-i*h))*N(hinv*(x(1)-j*h));
-    /// if(grad(0) < EPS) {
-        /// grad(0) = 0.0;
-    /// }
     grad(1) = hinv*N(hinv*(x(0)-i*h))*dN(hinv*(x(1)-j*h));
-    /// if(grad(1) < EPS) {
-        /// grad(1) = 0.0;
-    /// }
     return grad;
 }
 

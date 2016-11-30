@@ -94,15 +94,39 @@ void display() {
      */
     //Draw grid structure
     glColor3f(0.8, 0.8, 0.8);
-    glPointSize(6);
-    for (int i = 0; i < m->m; i++) {
-        for (int j = 0; j < m->n; j++) {
-            Vector2d x = m->x0 + Vector2d(i+0.5, j+0.5)*m->h;
-            glBegin(GL_POINTS);
+    /// glPointSize(6);
+    /// for (int i = 0; i < m->m; i++) {
+        /// for (int j = 0; j < m->n; j++) {
+            /// Vector2d x = m->x0 + Vector2d(i+0.5, j+0.5)*m->h;
+            /// glBegin(GL_POINTS);
+            /// glVertex2f(x(0), x(1));
+            /// glEnd();
+        /// }
+    /// }
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i < m->m+1; i++) {
+        for (int j = 0; j < m->n+1; j++) {
+            Vector2d gridPos = Vector2d(i, j);
+            if(i % 2 == 1) {
+                gridPos = Vector2d(i, m->n-j);
+            }
+            Vector2d x = m->x0 + gridPos*m->h;
             glVertex2f(x(0), x(1));
-            glEnd();
         }
     }
+    glEnd();
+    glBegin(GL_LINE_STRIP);
+    for (int j = 0; j < m->n+1; j++) {
+        for (int i = 0; i < m->m+1; i++) {
+            Vector2d gridPos = Vector2d(i, j);
+            if(j % 2 == 1) {
+                gridPos = Vector2d(m->m-i, j);
+            }
+            Vector2d x = m->x0 + gridPos*m->h;
+            glVertex2f(x(0), x(1));
+        }
+    }
+    glEnd();
     //just draw the particles 
     std::vector<Particle*> ps = m->particles;
     glPointSize(5);
