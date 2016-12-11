@@ -2,13 +2,20 @@
 #define MATERIAL_HPP_
 
 #include "grid.hpp"
+#include "defines.hpp"
 
 class Force;
 
 class Particle {
 public:
+    #ifndef NDEBUG
+    Eigen::Vector2d interpPos;
+    #endif
+    //Temp
+    Eigen::Matrix2d stress;
+    
     Eigen::Vector2d x, v;      //postition, velocity
-    Eigen::Vector3d color;     
+    Eigen::Vector3d color;
     double m;           //mass
     Eigen::Matrix2d gradient;  //deformation gradient
     double rho;         //density
@@ -29,7 +36,11 @@ public:
     Grid<double> mass;
     //No pressure projection, so no staggered grid needed
     Grid<Eigen::Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
-    
+
+    #ifndef NDEBUG
+    Grid<Eigen::Vector2d> worldPos;
+    #endif
+
     Material(std::string config);
     Eigen::Vector2d getExtForces(int i, int j);    //External forces for grid cell (i, j)
     //Functions

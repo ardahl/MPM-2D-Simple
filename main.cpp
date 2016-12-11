@@ -14,7 +14,7 @@ using namespace Eigen;
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 8*30, curr = 0;
+int seconds = 1*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -59,26 +59,25 @@ void display() {
         exit(0);
     }
     //Perform step
-    int iters = 1000;
+    int iters = 10000;
     double itersInv = 1.0/(10*iters);
-    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-4
+    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
         /// printf("Step %d\n", i);
         m->step((1.0/3.0)*itersInv);
         printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
     }
     printf("\n");
     
-    /// #ifndef NDEBUG
-    /// //output gradient for debug
-    /// if(curr%30 == 0) {
-        /// for(int i = 0; i < m->particles.size(); i++) {
-            /// Particle* p = m->particles[i];
-            /// debug << "particle " << i << "\n";
-            /// debug << p->gradient << "\n";
-        /// }
-        /// debug << "\n\n";
-    /// }
-    /// #endif
+    #ifndef NDEBUG
+    Grid<Vector2d> vel = m->velStar;
+    for(int i = 0; i < vel.m; i++) {
+        for(int j = 0; j < vel.n; j++) {
+            debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
+        }
+        debug << "\n";
+    }
+    debug << "\n\n";
+    #endif
     
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -94,15 +93,6 @@ void display() {
      */
     //Draw grid structure
     glColor3f(0.8, 0.8, 0.8);
-    /// glPointSize(6);
-    /// for (int i = 0; i < m->m; i++) {
-        /// for (int j = 0; j < m->n; j++) {
-            /// Vector2d x = m->x0 + Vector2d(i+0.5, j+0.5)*m->h;
-            /// glBegin(GL_POINTS);
-            /// glVertex2f(x(0), x(1));
-            /// glEnd();
-        /// }
-    /// }
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < m->m+1; i++) {
         for (int j = 0; j < m->n+1; j++) {
@@ -152,8 +142,14 @@ void idle() {
 }
 
 int main(int argc, char** argv) {
+    if(argc < 3) {
+        std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
+        std::exit(0);
+    }
+    std::string outfile = std::string(argv[2]);
     #ifndef NDEBUG
-    debug.open("debugging.txt");
+    std::string dbout = outfile + std::string(".txt");
+    debug.open(dbout.c_str());
     #endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_MULTISAMPLE);
@@ -177,7 +173,8 @@ int main(int argc, char** argv) {
     glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
     //set length of one complete row in destination data (doesn't need to equal img.cols)
     glPixelStorei(GL_PACK_ROW_LENGTH, img.step/img.elemSize());
-    output = cv::VideoWriter("test.avi", CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(w, h));
+    std::string videoout = outfile + std::string(".avi");
+    output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(w, h));
     
     m = new Material(config);
     m->init();

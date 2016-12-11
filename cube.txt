@@ -1,14 +1,14 @@
 #object x y l w resx resy
-object 0.4 0.4 0.3 0.3 35 35
-#dim x y. Currently m and n need to be equal
-dim 100 100
-#max m (per particle)
+object 0.405 0.405 0.3 0.3 50 50
+#dim x y. Dimentions of the grid. Currently m and n need to be equal
+dim 40 40
+#mass m (per particle)
 mass 1
 #color r g b
 color 1 0 0
 #h value (grid spacing). Ignoring for 2d, bounds are always [0, 1]
 ##h 0.1
 #lame lambda mu
-lame 1 1
+lame 6e4 1e4
 #g x y (gravity)
-g 0 -9.8
+g 0 -9.81
