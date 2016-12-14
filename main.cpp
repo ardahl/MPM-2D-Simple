@@ -14,7 +14,7 @@ using namespace Eigen;
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 1*30, curr = 0;
+int seconds = 3*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -59,17 +59,17 @@ void display() {
         exit(0);
     }
     //Perform step
-    int iters = 10000;
-    double itersInv = 1.0/(10*iters);
-    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
-        /// printf("Step %d\n", i);
-        m->step((1.0/3.0)*itersInv);
-        printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
-    }
-    printf("\n");
-    
     #ifndef NDEBUG
-    Grid<Vector2d> vel = m->velStar;
+    debug << "Vel:\n";
+    Grid<Vector2d> vel = m->vel;
+    for(int i = 0; i < vel.m; i++) {
+        for(int j = 0; j < vel.n; j++) {
+            debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
+        }
+        debug << "\n";
+    }
+    debug << "\nVelStar\n";
+    vel = m->velStar;
     for(int i = 0; i < vel.m; i++) {
         for(int j = 0; j < vel.n; j++) {
             debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
@@ -78,6 +78,15 @@ void display() {
     }
     debug << "\n\n";
     #endif
+    
+    int iters = 10000;
+    double itersInv = 1.0/(10*iters);
+    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
+        /// printf("Step %d\n", i);
+        m->step((1.0/3.0)*itersInv);
+        printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
+    }
+    printf("\n");
     
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);

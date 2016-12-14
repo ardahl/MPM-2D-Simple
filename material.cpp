@@ -69,6 +69,7 @@ Material::Material(std::string config) {
             particles.push_back(par);
         }
     }
+    Vector2d center = object+Vector2d(l/2.0, w/2.0);
     printf("Number of particles: %d\n", (int)particles.size());
     printf("Dimentions: %dx%d\n", m, n);
     printf("Spacing: %f\n", h);
@@ -76,10 +77,13 @@ Material::Material(std::string config) {
     printf("Gravity: (%f, %f)\n", grav(0), grav(1));
     Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
     printf("X0: (%f, %f)\n", xGrid(0), xGrid(1));
+    printf("Center: (%f, %f)\n", center(0), center(1));
     mass = Grid<double>(m, n, xGrid, h);
     vel = velStar = f = Grid<Vector2d>(m, n, xGrid, h);
-    Force* g = new Gravity(grav);
-    forces.push_back(g);
+    /// Force* g = new Gravity(grav);
+    /// forces.push_back(g);
+    Force* r = new Rotate(center);
+    forces.push_back(r);
 
     #ifndef NDEBUG
     //Test grid interpolation
@@ -308,7 +312,7 @@ void Material::updateGridVelocities(double dt) {
                 velStar(i, j) = Vector2d(0, 0);
             }
             else {
-                velStar(i, j) = vel(i, j) + dt * (1.0/mass(i, j)) * f(i, j) + dt * getExtForces(i, j); //dt*g
+                velStar(i, j) = vel(i, j) + dt * (1.0/mass(i, j)) * f(i, j) + getExtForces(dt, i, j); //dt*g
             }
             #ifndef NDEBUG
             if(velStar(i, j).hasNaN()) {
@@ -426,7 +430,7 @@ void Material::gridToParticles(double dt) {
         #endif
 		p->v = (alpha * flip) + ((1 - alpha) * pic);
         /// TODO: Mass proportional damping
-        p->v *= 0.998;
+        p->v *= 0.999999;
         #ifndef NDEBUG
         if(p->v.hasNaN()) {
             printf("Vel has NaN\n");
@@ -481,17 +485,26 @@ void Material::gridToParticles(double dt) {
 }
 
 
-Vector2d Material::getExtForces(int i, int j) {
+Vector2d Material::getExtForces(double dt, int i, int j) {
     Vector2d force(0, 0);
     for(int i = 0; i < forces.size(); i++) {
-        force += forces[i]->addForces(this, i, j);
+        force += forces[i]->addForces(this, dt, i, j);
     }
+    /// printf("Force: (%f, %f)\n", force(0), force(1));
     return force;
 }
 
-Vector2d Gravity::addForces(Material *mat, int i, int j) {
+Vector2d Gravity::addForces(Material *mat, double dt, int i, int j) {
     if(!enabled) {
         return Vector2d(0, 0);
     }
-    return g;
+    return dt*g;
+}
+
+Vector2d Rotate::addForces(Material *mat, double dt, int i, int j) {
+    double x = mat->x0(0) + mat->h * i;
+    double y = mat->x0(1) + mat->h * j;
+    /// (-y + center_y, x - center_x)
+    /// printf("X, Y, Center: (%d, %f), (%d, %f), (%f, %f)\n", i, x, j, y, center(0), center(1));
+    return dt*Vector2d(-y + center(1), x - center(0));
 }
