@@ -79,7 +79,7 @@ void display() {
     debug << "\n\n";
     #endif
     
-    int iters = 10000;
+    int iters = 1000;
     double itersInv = 1.0/(10*iters);
     for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
         /// printf("Step %d\n", i);
@@ -101,6 +101,8 @@ void display() {
      * Draw the actual stuff
      */
     //Draw grid structure
+    Vector2d x0 = m->x0 - Vector2d(m->h/2.0, m->h/2.0);
+    Vector2d x1 = m->x1 - Vector2d(m->h/2.0, m->h/2.0);
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < m->m+1; i++) {
@@ -109,8 +111,9 @@ void display() {
             if(i % 2 == 1) {
                 gridPos = Vector2d(i, m->n-j);
             }
-            Vector2d x = m->x0 + gridPos*m->h;
-            glVertex2f(x(0), x(1));
+            Vector2d x = x0 + gridPos*m->h;
+            
+            glVertex2f(x(0)/x1(0), x(1)/x1(1));
         }
     }
     glEnd();
@@ -121,8 +124,8 @@ void display() {
             if(j % 2 == 1) {
                 gridPos = Vector2d(m->m-i, j);
             }
-            Vector2d x = m->x0 + gridPos*m->h;
-            glVertex2f(x(0), x(1));
+            Vector2d x = x0 + gridPos*m->h;
+            glVertex2f(x(0)/x1(0), x(1)/x1(1));
         }
     }
     glEnd();
@@ -134,7 +137,7 @@ void display() {
     for(int i = 0; i < ps.size(); i++) {
         Particle* p = ps[i];
         glColor3f(p->color(0), p->color(1), p->color(2));
-        glVertex2f(p->x(0), p->x(1));
+        glVertex2f(p->x(0)/x1(0), p->x(1)/x1(1));
     }
     glEnd();
     

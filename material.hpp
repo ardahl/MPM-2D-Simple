@@ -28,7 +28,7 @@ public:
     int stepNum;
     std::vector<Particle*> particles;
     std::vector<Force*> forces;
-    Eigen::Vector2d x0;
+    Eigen::Vector2d x0, x1;                 //lower left and upper right positions
     int m, n;                               //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress

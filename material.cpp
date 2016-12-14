@@ -27,6 +27,7 @@ Material::Material(std::string config) {
     int resx, resy;
     std::string str;
     x0 = Vector2d(0, 0);
+    Force* frc = NULL;
     while(scn >> str) {
         //Ignore empty lines
         if(str == "") {
@@ -49,73 +50,79 @@ Material::Material(std::string config) {
         else if(str == "color") {
             scn >> c(0) >> c(1) >> c(2);
         }
-        /// else if(str == "h") {
-            /// scn >> h;
-        /// }
+        else if(str == "h") {
+            scn >> h;
+        }
         else if(str == "lame") {
             scn >> lambda >> mu;
         }
         else if(str == "g") {
             scn >> grav(0) >> grav(1);
+            frc = new Gravity(grav);
+            forces.push_back(frc);
+        }
+        else if(str == "rotate") {
+            Vector2d center = object+Vector2d(l/2.0, w/2.0);
+            frc = new Rotate(center);
+            forces.push_back(frc);
         }
     }
     scn.close();
-    h = 1.0/m;      //Grid bounds always to from 0 to 1 and square so we can set this explicitly
+    /// h = 1.0/m;      //Grid bounds always to from 0 to 1 and square so we can set this explicitly
+    Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
+    x0 = xGrid;
+    x1 = x0 + h*Vector2d(m, n);
     //Set up particles at each object vertex
-    for(int i = 0; i <= resx-1; i++) {
-        for(int j = 0; j <= resy-1; j++) {
-            Vector2d pos = object + Vector2d(l*((double)i/(resx-1)), w*((double)j/(resy-1)));
+    double diffx = l / (resx-1);
+    double diffy = w / (resy-1);
+    for(int i = 0; i < resx; i++) {
+        for(int j = 0; j < resy; j++) {
+            /// Vector2d pos = object + Vector2d(l*((double)i/(resx-1)), w*((double)j/(resy-1)));
+            Vector2d pos = object + Vector2d(diffx*i, diffy*j);
             Particle* par = new Particle(pos, Vector2d(0,0), c, pmass);
             particles.push_back(par);
         }
     }
-    Vector2d center = object+Vector2d(l/2.0, w/2.0);
+
     printf("Number of particles: %d\n", (int)particles.size());
     printf("Dimentions: %dx%d\n", m, n);
     printf("Spacing: %f\n", h);
     printf("Lame Constants: %f, %f\n", lambda, mu);
     printf("Gravity: (%f, %f)\n", grav(0), grav(1));
-    Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
-    printf("X0: (%f, %f)\n", xGrid(0), xGrid(1));
-    printf("Center: (%f, %f)\n", center(0), center(1));
+    printf("Object Spacing: (%f, %f)\n", diffx, diffy);
+    printf("X0: (%f, %f)\n", x0(0), x0(1));
+    printf("X1: (%f, %f)\n", x1(0), x1(1));
     mass = Grid<double>(m, n, xGrid, h);
     vel = velStar = f = Grid<Vector2d>(m, n, xGrid, h);
-    /// Force* g = new Gravity(grav);
-    /// forces.push_back(g);
-    Force* r = new Rotate(center);
-    forces.push_back(r);
 
-    #ifndef NDEBUG
-    //Test grid interpolation
-    //Set grid values to their world position
-    worldPos = Grid<Vector2d>(m, n, xGrid, h);
-    /// debug << "\nWorld Pos Grid\n";
-    for(int i = 0; i < m; i++) {
-        for(int j = 0; j < n; j++) {
-            worldPos(i, j) = worldPos.x0 + Vector2d(i*h, j*h);
-            debug << "(" << worldPos(i, j)(0) << ", " << worldPos(i, j)(1) << ")  ";
-        }
-        debug << "\n";
-    }
-    //Try and recover particle positions
-    debug << "Interpolated Particle Positions\n";
-    for(int i = 0; i < particles.size(); i++) {
-        Particle* p = particles[i];
-        p->interpPos = Vector2d(0.0, 0.0);
-        // debug << "\nWeights:\n";
-        for(int j = worldPos.lower(p->x, 0); j < worldPos.upper(p->x, 0); j++) {
-            for(int k = worldPos.lower(p->x, 1); k < worldPos.upper(p->x, 1); k++) {
-        /// for(int j = 0; j < m; j++) {
-            /// for(int k = 0; k < n; k++) {
-                if(i == 1 && worldPos.weight(p->x, j, k) > 1e-8) {
-                    debug << "(" << j << "," << k << "): " << worldPos.weight(p->x, j, k) << "\n";
-                }
-                p->interpPos += worldPos.weight(p->x, j, k) * worldPos(j, k);
-            }
-        }
-        debug << "Particle " << i << ": (" << p->x(0) << ", " << p->x(1) << ") -> (" << p->interpPos(0) << ", " << p->interpPos(1) << ")\n";
-    }
-    #endif
+    /// #ifndef NDEBUG
+    /// //Test grid interpolation
+    /// //Set grid values to their world position
+    /// worldPos = Grid<Vector2d>(m, n, xGrid, h);
+    /// for(int i = 0; i < m; i++) {
+        /// for(int j = 0; j < n; j++) {
+            /// worldPos(i, j) = worldPos.x0 + Vector2d(i*h, j*h);
+            /// debug << "(" << worldPos(i, j)(0) << ", " << worldPos(i, j)(1) << ")  ";
+        /// }
+        /// debug << "\n";
+    /// }
+    /// //Try and recover particle positions
+    /// debug << "Interpolated Particle Positions\n";
+    /// for(int i = 0; i < particles.size(); i++) {
+        /// Particle* p = particles[i];
+        /// p->interpPos = Vector2d(0.0, 0.0);
+        /// // debug << "\nWeights:\n";
+        /// for(int j = worldPos.lower(p->x, 0); j < worldPos.upper(p->x, 0); j++) {
+            /// for(int k = worldPos.lower(p->x, 1); k < worldPos.upper(p->x, 1); k++) {
+                /// if(i == 1 && worldPos.weight(p->x, j, k) > 1e-8) {
+                    /// debug << "(" << j << "," << k << "): " << worldPos.weight(p->x, j, k) << "\n";
+                /// }
+                /// p->interpPos += worldPos.weight(p->x, j, k) * worldPos(j, k);
+            /// }
+        /// }
+        /// debug << "Particle " << i << ": (" << p->x(0) << ", " << p->x(1) << ") -> (" << p->interpPos(0) << ", " << p->interpPos(1) << ")\n";
+    /// }
+    /// #endif
 }
 
 void Material::init() {
@@ -490,7 +497,6 @@ Vector2d Material::getExtForces(double dt, int i, int j) {
     for(int i = 0; i < forces.size(); i++) {
         force += forces[i]->addForces(this, dt, i, j);
     }
-    /// printf("Force: (%f, %f)\n", force(0), force(1));
     return force;
 }
 
@@ -504,7 +510,5 @@ Vector2d Gravity::addForces(Material *mat, double dt, int i, int j) {
 Vector2d Rotate::addForces(Material *mat, double dt, int i, int j) {
     double x = mat->x0(0) + mat->h * i;
     double y = mat->x0(1) + mat->h * j;
-    /// (-y + center_y, x - center_x)
-    /// printf("X, Y, Center: (%d, %f), (%d, %f), (%f, %f)\n", i, x, j, y, center(0), center(1));
     return dt*Vector2d(-y + center(1), x - center(0));
 }
