@@ -24,7 +24,7 @@ public:
     friend std::ostream& operator<<(std::ostream &out, const Grid &grid) {
         for(int i = 0; i < grid.m; i++) {
             for(int j = 0; j < grid.n; j++) {
-                out << grid.values[i+grid.m*j] << "    ";
+                out << grid.values[i*grid.n+j] << "    ";
             }
             out << "\n";
         }

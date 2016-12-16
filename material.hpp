@@ -37,6 +37,7 @@ public:
     //No pressure projection, so no staggered grid needed
     Grid<Eigen::Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
 
+    Eigen::Vector2d center;
     #ifndef NDEBUG
     Grid<Eigen::Vector2d> worldPos;
     #endif
@@ -74,7 +75,7 @@ class Rotate : public Force {
 public:
     Eigen::Vector2d center;
     double speed; //radians per second
-    Rotate(Eigen::Vector2d center): center(center) {}
+    Rotate(Eigen::Vector2d center, double speed): center(center), speed(speed) {}
     Eigen::Vector2d addForces(Material *mat, double dt, int i, int j);
 };
 

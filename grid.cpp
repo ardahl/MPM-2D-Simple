@@ -21,12 +21,14 @@ void Grid<T>::assign(T value) {
 //Ask if higher order interpolation should indeed recover the exact values
 template <typename T>
 double Grid<T>::weight(Vector2d x, int i, int j) {
-    double w = N(hinv*(x(0)-i*h-h/2.0)) * N(hinv*(x(1)-j*h-h/2.0));
+    x = x - x0;
+    double w = N(hinv*(x(0)-i*h)) * N(hinv*(x(1)-j*h));
     return w;
 }
 
 template <typename T>
 Vector2d Grid<T>::gradWeight(Vector2d x, int i, int j) {
+    x = x - x0;
     Vector2d grad(0.0, 0.0);
     grad(0) = hinv*dN(hinv*(x(0)-i*h))*N(hinv*(x(1)-j*h));
     grad(1) = hinv*N(hinv*(x(0)-i*h))*dN(hinv*(x(1)-j*h));
@@ -59,15 +61,17 @@ double Grid<T>::dN(double x) {
 
 template <typename T>
 int Grid<T>::lower(Vector2d x, int axis) {
-    /// return std::max(0, (int)std::ceil(-2.0 + x(axis)/h));
-    return std::max(0, (int)std::ceil(-2.0 + x(axis)/h) - 1);
+    double xval = x(axis);
+    xval = xval - x0(axis);
+    return std::max(0, (int)std::ceil(-2.0 + xval/h) - 1);
 }
 
 template <typename T>
 int Grid<T>::upper(Vector2d x, int axis) {
     int bounds = (axis == 0) ? m : n;
-    /// return std::min(bounds, (int)std::floor(2.0 + x(axis)/h));
-    return std::min(bounds, (int)std::floor(2.0 + x(axis)/h) + 1);
+    double xval = x(axis);
+    xval = xval - x0(axis);
+    return std::min(bounds, (int)std::floor(2.0 + xval/h) + 1);
 }
 
 template class Grid<char>;

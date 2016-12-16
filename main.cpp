@@ -14,7 +14,7 @@ using namespace Eigen;
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 3*30, curr = 0;
+int seconds = 10*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -44,12 +44,6 @@ void onKey(unsigned char key, int x, int y) {
 }
 
 void display() {
-    /// if(!next) {
-        /// return;
-    /// }
-    /// else {
-        /// next = false;
-    /// }
     curr++;
     if(curr > seconds) {
         printf("\nRender Done\n");
@@ -59,31 +53,11 @@ void display() {
         exit(0);
     }
     //Perform step
-    #ifndef NDEBUG
-    debug << "Vel:\n";
-    Grid<Vector2d> vel = m->vel;
-    for(int i = 0; i < vel.m; i++) {
-        for(int j = 0; j < vel.n; j++) {
-            debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
-        }
-        debug << "\n";
-    }
-    debug << "\nVelStar\n";
-    vel = m->velStar;
-    for(int i = 0; i < vel.m; i++) {
-        for(int j = 0; j < vel.n; j++) {
-            debug << "(" << vel(i, j)(0) << ", " << vel(i, j)(1) << ")  ";
-        }
-        debug << "\n";
-    }
-    debug << "\n\n";
-    #endif
-    
-    int iters = 1000;
-    double itersInv = 1.0/(10*iters);
+    int iters = 4000;
+    double itersInv = 1.0/iters;
     for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
         /// printf("Step %d\n", i);
-        m->step((1.0/3.0)*itersInv);
+        m->step((1.0/30.0)*itersInv);
         printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
     }
     printf("\n");
@@ -103,6 +77,7 @@ void display() {
     //Draw grid structure
     Vector2d x0 = m->x0 - Vector2d(m->h/2.0, m->h/2.0);
     Vector2d x1 = m->x1 - Vector2d(m->h/2.0, m->h/2.0);
+    Vector2d x10 = x1 - x0;
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < m->m+1; i++) {
@@ -112,8 +87,8 @@ void display() {
                 gridPos = Vector2d(i, m->n-j);
             }
             Vector2d x = x0 + gridPos*m->h;
-            
-            glVertex2f(x(0)/x1(0), x(1)/x1(1));
+            x = x - x0;
+            glVertex2f(x(0)/x10(0), x(1)/x1(1));
         }
     }
     glEnd();
@@ -125,7 +100,8 @@ void display() {
                 gridPos = Vector2d(m->m-i, j);
             }
             Vector2d x = x0 + gridPos*m->h;
-            glVertex2f(x(0)/x1(0), x(1)/x1(1));
+            x = x - x0;
+            glVertex2f(x(0)/x10(0), x(1)/x10(1));
         }
     }
     glEnd();
@@ -137,7 +113,7 @@ void display() {
     for(int i = 0; i < ps.size(); i++) {
         Particle* p = ps[i];
         glColor3f(p->color(0), p->color(1), p->color(2));
-        glVertex2f(p->x(0)/x1(0), p->x(1)/x1(1));
+        glVertex2f((p->x(0)-x0(0))/x10(0), (p->x(1)-x0(1))/x10(1));
     }
     glEnd();
     
