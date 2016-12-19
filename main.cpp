@@ -14,7 +14,7 @@ using namespace Eigen;
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 10*30, curr = 0;
+int seconds = 15*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
@@ -53,7 +53,7 @@ void display() {
         exit(0);
     }
     //Perform step
-    int iters = 4000;
+    int iters = 2000;
     double itersInv = 1.0/iters;
     for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
         /// printf("Step %d\n", i);

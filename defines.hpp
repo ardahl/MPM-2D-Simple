@@ -13,7 +13,7 @@
 /// Code for debugging should be put around a #ifndef NDEBUG guard. The define
 /// below should be commented if you want the debug output, and uncommented to
 /// remove debug output.
-/// #define NDEBUG
+#define NDEBUG
 
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later
