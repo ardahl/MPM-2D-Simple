@@ -227,7 +227,7 @@ void Material::particlesToGrid() {
             }
         }
 	}
-    #pragma omp parallel for collapse(2)
+    /// #pragma omp parallel for collapse(2)
 	for(int i = 0; i < vel.m; i++) {
 		for(int j = 0; j < vel.n; j++) {
             if(std::abs(mass(i, j)) < EPS) {
@@ -297,7 +297,7 @@ void Material::computeGridForces() {
  *      end for
  *****************************/
 void Material::updateGridVelocities(double dt) {
-    #pragma omp parallel for collapse(2)
+    /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < velStar.m; i++) {
         for(int j = 0; j < velStar.n; j++) {
             if(std::abs(mass(i, j)) < EPS) {
@@ -329,7 +329,7 @@ void Material::updateGridVelocities(double dt) {
  *      end for
  *****************************/
 void Material::updateGradient(double dt) {
-    #pragma omp parallel for 
+    /// #pragma omp parallel for 
     for(int i = 0; i < particles.size(); i++) {
         Particle* p = particles[i];
         Matrix2d gradV = Matrix2d::Zero();
@@ -382,7 +382,7 @@ void Material::updateGradient(double dt) {
  *****************************/
 void Material::gridToParticles(double dt) {
     double alpha = 0.95;
-    #pragma omp parallel for
+    /// #pragma omp parallel for
     for(int i = 0; i < particles.size(); i++) {
 		Particle* p = particles[i];
 		//Update velocities

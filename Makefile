@@ -11,12 +11,12 @@ else # Linux?
 
 endif
 
-OBJ := grid.o material.o main.o
+OBJ := build/grid.o build/material.o build/main.o
 
 mpm: $(OBJ)
 	$(CXX) $^ -o $@ $(LDFLAGS)
 
-%.o: %.cpp
+build/%.o: %.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 # Nicked from http://www.gnu.org/software/make/manual/make.html#Automatic-Prerequisites

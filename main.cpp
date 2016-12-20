@@ -14,7 +14,7 @@ using namespace Eigen;
 int w = 800, h = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 15*30, curr = 0;
+int seconds = 7*30, curr = 0;
 bool next = true;
 
 cv::Mat img(h, w, CV_8UC3);
