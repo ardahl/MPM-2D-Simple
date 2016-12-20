@@ -38,19 +38,20 @@ int main(int argc, char** argv) {
     #endif
     
     std::string config = std::string(argv[1]);
+    
     ConfigParser conf(config);
     Material* m = new Material(config);
     m->init();
     
-    int frame = 0, totalFrames = 7*30;
+    int frame = 0, totalFrames = conf.getInt("time")*30;
+    int iters = conf.getInt("iterations");
+    double itersInv = 1.0/iters;
     //setup
     dumpOut << totalFrames << " " << m->particles.size() << "\n";
     dumpOut << m->x0(0) << " " << m->x0(1) << " " << m->h << " " << m->m << " " << m->n << "\n\n";
     while(frame < totalFrames) {
         frame++;
         //Perform step
-        int iters = 2000;
-        double itersInv = 1.0/iters;
         for(int i = 0; i < iters; i++) {
             /// printf("Step %d\n", i);
             m->step((1.0/30.0)*itersInv);

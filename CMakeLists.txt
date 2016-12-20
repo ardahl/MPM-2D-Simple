@@ -4,7 +4,7 @@ project(MPM)
 ###
 # User Options
 ###
-set( CMAKE_BUILD_TYPE Release )
+set( CMAKE_BUILD_TYPE Debug )
 #Source directory
 set( SRC "src")
 #mpm
@@ -86,6 +86,10 @@ if(MPM_BASIC)
 endif(MPM_BASIC)
 #Data Dumper
 if(MPM_DUMP)
-    add_executable(mpm_dump ${SOURCES} ${SRC}/main2.cpp)
+    add_executable(mpm_dump ${SOURCES} ${SRC}/mainDump.cpp)
 endif(MPM_DUMP)
 #Data viewer
+if(MPM_DUMP_VIEW)
+    add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
+    target_link_libraries(viewer ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+endif(MPM_DUMP_VIEW)

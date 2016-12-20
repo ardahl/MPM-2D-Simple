@@ -11,15 +11,14 @@ class ConfigParser {
         
         bool exists(std::string key);
         int getNumParams(std::string key);
+        int getNumOptions();
         
-        int getInt(std::string key, int index, int defaultVal);
-        double getDouble(std::string key, int index, double defaultVal);
-        char getChar(std::string key, int index, char defaultVal);
-        std::string getString(std::string key, int index, std::string defaultVal);
+        int getInt(std::string key, int index=0, int defaultVal=0);
+        double getDouble(std::string key, int index=0, double defaultVal=0.0);
+        char getChar(std::string key, int index=0, char defaultVal=0);
+        std::string getString(std::string key, int index=0, std::string defaultVal="");
     
     private:
-        int getIndex(std::string key);
-        
         std::map<std::string, std::vector<std::string> > configs;
 };
 

@@ -1,0 +1,16 @@
+#object x y length height resx resy
+object -1.0 1.5 2.0 2.0 100 100
+#grid x y dx dy. Dimentions of the grid. Currently m and n need to be equal
+grid -2.5 0 50 50
+#mass m (per particle)
+mass 1
+#color r g b
+color 1 0 0
+#h value (grid spacing).
+h 0.1
+#lame lambda mu
+lame 1e6 1e6
+#g x y (gravity)
+#g 0 -3.0
+#rotate speed
+rotate 2.5

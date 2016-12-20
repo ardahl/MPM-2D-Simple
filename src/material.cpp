@@ -163,14 +163,14 @@ void Material::particleVolumesDensities() {
         p->rho /= (h*h);            //3D: h*h*h
         #ifndef NDEBUG
         if(std::isnan(p->rho) || std::isinf(p->rho)) {
-            printf("Paricle %d rho has NaN: %f\n", i, p->rho);
+            printf("Paricle %d rho has NaN: %f\n", (int)i, p->rho);
             exit(0);
         }
         #endif
         p->vol = p->m / p->rho;
         #ifndef NDEBUG
         if(std::isnan(p->vol) || std::isinf(p->vol)) {
-            printf("Paricle %d volume has NaN: %f\nMass: %f\nDensity: %f\n", i, p->vol, p->m, p->rho);
+            printf("Paricle %d volume has NaN: %f\nMass: %f\nDensity: %f\n", (int)i, p->vol, p->m, p->rho);
             exit(0);
         }
         #endif

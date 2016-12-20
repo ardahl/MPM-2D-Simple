@@ -2,7 +2,6 @@
 #include <fstream>
 #include <limits>
 #include <cstring>
-/// #include <iostream>
 
 ConfigParser::ConfigParser(std::string file, std::string delim) {
     std::ifstream scn;
@@ -20,7 +19,6 @@ ConfigParser::ConfigParser(std::string file, std::string delim) {
         }
         //Ignore Comments
         else if(str[0] == '#') {
-            scn.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
 
@@ -39,6 +37,10 @@ ConfigParser::ConfigParser(std::string file, std::string delim) {
             }
             str.erase(0, pos + delim.length());
         }
+        //Loop skips last value. If string isn't empty there's something left
+        if(!str.empty()) {
+            options.push_back(str);
+        }
         //Put in map
         configs[param] = options;
     }
@@ -54,6 +56,10 @@ int ConfigParser::getNumParams(std::string key) {
         return -1;
     }
     return it->second.size();
+}
+
+int ConfigParser::getNumOptions() {
+    return configs.size();
 }
         
 int ConfigParser::getInt(std::string key, int index, int defaultVal) {
