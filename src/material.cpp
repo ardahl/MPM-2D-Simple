@@ -12,6 +12,14 @@ std::ofstream debug;
 int count = 0;
 #endif
 
+//TODO: Different colored particles
+//TODO: Make circle
+
+//TODO: Check if forces to cells are what you should be getting 
+//applying it to particles
+//Plot 2norm of (F-R)
+//Rotation = (speed*dt)/(mass of body) * pi/2
+
 Material::Material(std::string config) {
     stepNum = 0;
     std::ifstream scn;

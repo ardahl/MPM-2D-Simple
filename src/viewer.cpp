@@ -61,7 +61,10 @@ bool readAnimation(char *fname, std::vector<Frame> &frames) {
     std::ifstream in(fname, std::ios::in);
 
     in >> nframes >> nparticles;
-    in >> lx >> ly >> ux >> uy >> resx >> resy;
+    //This is just garbade for now. Reading it in to skip it
+    in >> lx >> ly >> ux >> uy >> resx;
+    //It will become this once rendering of the grid is done
+    /// in >> lx >> ly >> ux >> uy >> resx >> resy; 
     frames.resize(nframes);
     for(int i=0; i < nframes; i++) {
         for(unsigned int j=0; j < nparticles; j++) {
@@ -80,14 +83,14 @@ bool readAnimation(char *fname, std::vector<Frame> &frames) {
 ///////////////////////////////////////////////////
 void Particle::draw() {
     glPushMatrix();
-    GLfloat c[4] = {0.0, 1.0, 0.0, 1.0};
-    glTranslated(pos[0], pos[1], pos[2]);
+    GLfloat c[4] = {1.0, 0.0, 0.0, 1.0};
+    glTranslated(pos(0), pos(1), pos(2));
     glMaterialfv(GL_FRONT, GL_AMBIENT, c);
     glMaterialfv(GL_FRONT, GL_DIFFUSE, c);
     glMaterialfv(GL_FRONT, GL_SPECULAR, c);
     
     //position
-    glPointSize(1.0f);
+    glPointSize(5.0f);
     glBegin(GL_POINTS);
     glVertex3f(pos(0), pos(1), pos(2));
     glEnd();
