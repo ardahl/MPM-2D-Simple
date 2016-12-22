@@ -59,6 +59,7 @@ void display() {
         /// printf("Step %d\n", i);
         world->step((1.0/30.0)*itersInv);
         printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
+		std::cout<<std::flush;
     }
     printf("\n");
     
