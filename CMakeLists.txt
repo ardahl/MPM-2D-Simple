@@ -9,12 +9,12 @@ set( CMAKE_BUILD_TYPE Debug )
 set( SRC "src")
 #mpm
 option(MPM_GRAPHICS "Compile the frame-grabbing mpm viewer" ON)
-#mpm_dump 
-option(MPM "Compile the simulation that just dumps data to file for later viewing" ON)
+#mpm_sim
+option(MPM_SIM "Compile the simulation that just dumps data to file for later viewing" ON)
 #Haven't written these parts yet
-#mpm_dump viewer
+#mpm_sim viewer
 option(MPM_DUMP_VIEW "Compile the OpenGL viewer for the data files" ON)
-#mpm_dump viewer use opencv
+#mpm_sim viewer use opencv
 option(MPM_DUMP_VIEW_CV "Viewer compiles with OpenCV to save frames to video" ON)
 
 ###
@@ -82,11 +82,11 @@ set (SOURCES
 
 #Simulation and Viewer
 if(MPM_GRAPHICS)
-    add_executable(mpm ${SOURCES} ${SRC}/main_graphics.cpp)
-    target_link_libraries(mpm ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
+    add_executable(mpm_graphics ${SOURCES} ${SRC}/main_graphics.cpp)
+    target_link_libraries(mpm_graphics ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
 endif(MPM_GRAPHICS)
 #Data Dumper
-if(MPM)
+if(MPM_SIM)
     add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
 endif(MPM_DUMP)
 #Data viewer
