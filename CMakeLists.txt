@@ -8,9 +8,9 @@ set( CMAKE_BUILD_TYPE Debug )
 #Source directory
 set( SRC "src")
 #mpm
-option(MPM_BASIC "Compile the frame-grabbing mpm viewer" ON)
+option(MPM_GRAPHICS "Compile the frame-grabbing mpm viewer" ON)
 #mpm_dump 
-option(MPM_DUMP "Compile the simulation that just dumps data to file for later viewing" ON)
+option(MPM "Compile the simulation that just dumps data to file for later viewing" ON)
 #Haven't written these parts yet
 #mpm_dump viewer
 option(MPM_DUMP_VIEW "Compile the OpenGL viewer for the data files" ON)
@@ -76,17 +76,18 @@ endif(NOT OpenCV_FOUND)
 set (SOURCES
 	${SRC}/configparser.cpp
 	${SRC}/grid.cpp
-	${SRC}/material.cpp
+	${SRC}/world.cpp
+	${SRC}/jsoncpp.cpp
 )
 
 #Simulation and Viewer
-if(MPM_BASIC)
-    add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
+if(MPM_GRAPHICS)
+    add_executable(mpm ${SOURCES} ${SRC}/main_graphics.cpp)
     target_link_libraries(mpm ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
-endif(MPM_BASIC)
+endif(MPM_GRAPHICS)
 #Data Dumper
-if(MPM_DUMP)
-    add_executable(mpm_dump ${SOURCES} ${SRC}/mainDump.cpp)
+if(MPM)
+    add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
 endif(MPM_DUMP)
 #Data viewer
 if(MPM_DUMP_VIEW)
