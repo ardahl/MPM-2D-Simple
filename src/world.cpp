@@ -25,7 +25,7 @@ int count = 0;
 
 World::World(std::string config) {
   stepNum = 0;
-  elapsedTime = 0;
+  elapsedTime = 0.0;
   filename = config;
 
   std::ifstream ins(filename.c_str());
@@ -62,15 +62,15 @@ World::World(std::string config) {
 	  std::cout<< "bad object size, skipping" << std::endl;
 	  continue;
 	}
-	l = sizeIn[i][1].asDouble();
-	w = sizeIn[i][0].asDouble();
+	l = sizeIn[0].asDouble();
+	w = sizeIn[1].asDouble();
 	auto resIn = objectsIn[i]["resolution"];
 	if (locationIn.size() != 2) {
 	  std::cout<< "bad object resolution, skipping" << std::endl;
 	  continue;
 	}
-	resx = resIn[i][0].asDouble();
-	resy = resIn[i][1].asDouble();
+	resx = resIn[0].asInt();
+	resy = resIn[1].asInt();
   }
 
   auto gridIn = root["grid"];
@@ -80,18 +80,17 @@ World::World(std::string config) {
 	  std::cout<< "bad grid origin, skipping" << std::endl;
 	} else {
 	  x0(0) = originIn[0].asDouble();
-	  x1(1) = originIn[1].asDouble();
+	  x0(1) = originIn[1].asDouble();
 	}
 	auto sizeIn = gridIn["size"];
 	if (sizeIn.size() != 2) {
 	  std::cout<< "bad grid size, skipping" << std::endl;
 	} else {
-	  m = sizeIn[1].asDouble();
-	  n = sizeIn[0].asDouble();
+	  m = sizeIn[0].asInt();
+	  n = sizeIn[1].asInt();
 	}
 	h = gridIn["h"].asDouble();
   }
-  
   pmass = root["mass"].asDouble();
   auto colorIn = root["color"];
   if (colorIn.size() != 3) {
@@ -107,13 +106,13 @@ World::World(std::string config) {
 	lambda = lameIn[0].asDouble();
 	mu = lameIn[1].asDouble();
   }
-
   auto gravityIn = root["gravity"];
   if (gravityIn.size() != 2) {
 	std::cout<< "bad gravity, skipping" << std::endl;
   } else {
     grav(0)= gravityIn[0].asDouble();
     grav(1)= gravityIn[1].asDouble();
+	frc = new Gravity(grav);
 	forces.push_back(frc);
   }
 
@@ -513,14 +512,15 @@ void World::gridToParticles(double dt) {
 Vector2d World::getExtForces(double dt, int i, int j) {
     Vector2d force(0, 0);
     for(size_t k = 0; k < forces.size(); k++) {
-        force += forces[k]->addForces(this, dt, i, j);
+	  forces[k]->addForces(this, dt, i, j);
+	    force += forces[k]->addForces(this, dt, i, j);
     }
     return force;
 }
 
 Vector2d Gravity::addForces(World *world, double dt, int i, int j) {
     if(!enabled) {
-        return Vector2d(0, 0);
+	    return Vector2d(0, 0);
     }
     return dt*g;
 }
