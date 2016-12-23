@@ -11,14 +11,14 @@
 
 using namespace Eigen;
 
-int w = 800, h = 800;                           // size of window in pixels
+int width = 800, height = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
 int seconds = 7*30, curr = 0;
 bool next = true;
 
-cv::Mat img(h, w, CV_8UC3);
-cv::Mat flipped(h, w, CV_8UC3);
+cv::Mat img(height, width, CV_8UC3);
+cv::Mat flipped(height, width, CV_8UC3);
 cv::VideoWriter output;
 
 #ifndef NDEBUG
@@ -27,9 +27,9 @@ extern std::ofstream debug;
 World* world;
 
 void reshape(int w, int h) {
-    ::w = w;
-    ::h = h;
-    glViewport(0, 0, w, h);
+    ::width = w;
+    ::height = h;
+    glViewport(0, 0, width, height);
 }
 
 void onKey(unsigned char key, int x, int y) {
@@ -76,8 +76,10 @@ void display() {
      */
     //Draw grid structure
     Vector2d x0 = world->origin - Vector2d(world->h/2.0, world->h/2.0);
-    Vector2d x1 = world->origin + Vector2d(world->res[0]*h, world->res[1]*h) + Vector2d(world->h/2.0, world->h/2.0);
+    Vector2d x1 = world->origin + Vector2d(world->res[0]*world->h, world->res[1]*world->h) + Vector2d(world->h/2.0, world->h/2.0);
+	std::cout<<x0(0)<<" "<<x0(1)<<" "<<" "<<x1(0)<<" "<<x1(1)<<std::endl;
     Vector2d x10 = x1 - x0;
+	std::cout<<x10(0)<<" "<<x10(1)<<" "<<std::endl;
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < world->res[0]+1; i++) {
@@ -89,6 +91,7 @@ void display() {
             Vector2d x = x0 + gridPos*world->h;
             x = x - x0;
             glVertex2f(x(0)/x10(0), x(1)/x10(1));
+			//std::cout<<x(0)/x10(0)<<" "<<x(1)/x10(1)<<std::endl;
         }
     }
     glEnd();
@@ -140,7 +143,7 @@ int main(int argc, char** argv) {
     #endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_MULTISAMPLE);
-    glutInitWindowSize(::w, ::h);
+    glutInitWindowSize(::width, ::height);
     glutCreateWindow("Animation");
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
@@ -161,7 +164,7 @@ int main(int argc, char** argv) {
     //set length of one complete row in destination data (doesn't need to equal img.cols)
     glPixelStorei(GL_PACK_ROW_LENGTH, img.step/img.elemSize());
     std::string videoout = outfile + std::string(".avi");
-    output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(w, h));
+    output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(width, height));
     
     world = new World(config);
     world->init();
