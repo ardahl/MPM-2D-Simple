@@ -62,7 +62,6 @@ void display() {
 		std::cout<<std::flush;
     }
     printf("\n");
-    
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_BLEND);
@@ -77,7 +76,7 @@ void display() {
      */
     //Draw grid structure
     Vector2d x0 = world->origin - Vector2d(world->h/2.0, world->h/2.0);
-    Vector2d x1 = world->origin + Vector2d(world->res[0]*h + world->res[1]*h) + Vector2d(world->h/2.0, world->h/2.0);
+    Vector2d x1 = world->origin + Vector2d(world->res[0]*h, world->res[1]*h) + Vector2d(world->h/2.0, world->h/2.0);
     Vector2d x10 = x1 - x0;
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
@@ -89,7 +88,7 @@ void display() {
             }
             Vector2d x = x0 + gridPos*world->h;
             x = x - x0;
-            glVertex2f(x(0)/x10(0), x(1)/x1(1));
+            glVertex2f(x(0)/x10(0), x(1)/x10(1));
         }
     }
     glEnd();
@@ -117,7 +116,6 @@ void display() {
         glVertex2f((p.x(0)-x0(0))/x10(0), (p.x(1)-x0(1))/x10(1));
     }
     glEnd();
-    
     glReadPixels(0, 0, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
     cv::flip(img, flipped, 0);
     output << flipped;
