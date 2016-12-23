@@ -41,11 +41,23 @@ World::World(std::string config) {
   double size[2];
   Vector2d object;
   Vector3d c;
+  Vector2d object, grav;
+  std::string str, objType = "square";
+
+  x0 = Vector2d(0, 0);
+  Force* frc = NULL;
   int ores[2];
 
   auto objectsIn = root["objects"];
   for (auto i : range(objectsIn.size())) {
-	auto locationIn = objectsIn[i]["location"];
+    auto typeIn = objectsIn[i]["type"];
+	if (typeIn.size() != 1) {
+	  std::cout<< "bad object type, skipping" << std::endl;
+      std::cout << typeIn.size() << std::endl;
+	  continue;
+	}
+    objType = typeIn[0].asString();
+    auto locationIn = objectsIn[i]["location"];
 	if (locationIn.size() != 2) {
 	  std::cout<< "bad object location, skipping" << std::endl;
 	  continue;
@@ -118,21 +130,61 @@ World::World(std::string config) {
 	rotationEnabled = true;
 	rotation = rotationIn.asDouble();
   }
-
-  center = object + (Vector2d(size[0],size[1]) * 0.5);
-
-  origin(0) += h/2.0; origin(1) += h/2.0;
-
-  //Set up particles at each object vertex
-  double diffx = size[0] / (ores[0]-1.0);
-  double diffy = size[1] / (ores[1]-1.0);
-  for(int i = 0; i < ores[0]; i++) {
-	for(int j = 0; j < ores[1]; j++) {
-	  Vector2d pos = object + Vector2d(diffx*i, diffy*j);
-	  Particle par(pos, Vector2d(0,0), c, pmass);
-	  particles.push_back(par);
-	}
+  rotspeed = root["rotate"].asDouble();
+  if(objType == "square") {
+    center = object + (Vector2d(size[0],size[1]) * 0.5);
+    origin(0) += h/2.0; origin(1) += h/2.0;
   }
+  else if(objType == "circle") {
+      center = origin;
+  }
+  frc = new Rotate(center, rotspeed);
+  forces.push_back(frc);
+
+  Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
+  x0 = xGrid;
+  x1 = x0 + h*Vector2d(m, n);
+  if(objType == "square") {
+    //Set up particles at each object vertex
+    double diffx = l / (ores[0]-1);
+    double diffy = w / (ores[1]-1);
+    for(int i = 0; i < ores[0]; i++) {
+        for(int j = 0; j < ores[1]; j++) {
+            Vector2d pos = object + Vector2d(diffx*i, diffy*j);
+            Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
+            Particle* par = new Particle(pos, Vector2d(0,0), col, pmass);
+            particles.push_back(par);
+        }
+    }
+  }
+  if(objType == "circle") {
+      //non-randomly make a circle
+      //technically this is an ellipse because I'm using the same data as the
+      //square and just using the size vector as radius of the semi-major and semi-minor axes
+      //just make a square and reject those outside the ellipse.
+      //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
+      double diffx = 2*l / (ores[0]-1);
+      double diffy = 2*w / (ores[1]-1);
+      for(int i = 0; i < ores[0]; i++) {
+        for(int j = 0; j < ores[1]; j++) {
+            Vector2d pos = center - Vector2d(l, w) + Vector2d(diffx*i, diffy*j);
+            Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
+            Vector2d ph = pos - object;
+            if(i == resx/2.0 && j == resy/2.0) {
+                printf("Pos: (%f, %f)\n", pos(0), pos(1));
+                printf("Obj: (%f, %f)\n", object(0), object(1));
+                printf("ph: (%f, %f)\n", ph(0), ph(1));
+                printf("l, w: %f, %f\n", l, w);
+            }
+            /// double rx = l/2.0, ry = w/2.0;
+            if( ((ph(0)*ph(0))/(l*l)) + ((ph(1)*ph(1))/(w*w)) < 1+EPS) {
+                Particle* par = new Particle(pos, Vector2d(0,0), col, pmass);
+                particles.push_back(par);
+            }
+        }
+      }
+  }
+  
   //Average position for center of mass
   Vector2d avePos = Vector2d::Zero();
   for(size_t i = 0; i < particles.size(); i++) {
@@ -145,7 +197,6 @@ World::World(std::string config) {
   printf("Grid Spacing: %f\n", h);
   printf("Lame Constants: %f, %f\n", lambda, mu);
   printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
-  printf("Object Spacing: (%f, %f)\n", diffx, diffy);
   printf("Center of Mass: (%f, %f), (%f, %f)\n", center(0), center(1), avePos(0), avePos(1));
   printf("X0: (%f, %f)\n", origin(0), origin(1));
   printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
@@ -153,37 +204,6 @@ World::World(std::string config) {
   vel = new Vector2d[res[0]*res[1]];
   velStar = new Vector2d[res[0]*res[1]];
   frc = new Vector2d[res[0]*res[1]];
-  
-  //Test interpolation
-  /// #ifndef NDEBUG
-  /// //Test grid interpolation
-  /// //Set grid values to their world position
-  /// worldPos = Grid<Vector2d>(m, n, xGrid, h);
-  /// for(int i = 0; i < m; i++) {
-  /// for(int j = 0; j < n; j++) {
-  /// worldPos(i, j) = worldPos.x0 + Vector2d(i*h, j*h);
-  /// debug << "(" << worldPos(i, j)(0) << ", " << worldPos(i, j)(1) << ")  ";
-  /// }
-  /// debug << "\n";
-  /// }
-  /// //Try and recover particle positions
-  /// debug << "Interpolated Particle Positions\n";
-  /// for(int i = 0; i < particles.size(); i++) {
-  /// Particle* p = particles[i];
-  /// p->interpPos = Vector2d(0.0, 0.0);
-  /// // debug << "\nWeights:\n";
-  /// for(int j = worldPos.lower(p->x, 0); j < worldPos.upper(p->x, 0); j++) {
-  /// for(int k = worldPos.lower(p->x, 1); k < worldPos.upper(p->x, 1); k++) {
-  /// p->interpPos += worldPos.weight(p->x, j, k) * worldPos(j, k);
-  /// }
-  /// }
-  /// Vector2d difference = p->x - p->interpPos;
-  /// if(!difference.isZero(1e8)) {
-  /// debug << "Particle " << i << ": (" << p->x(0) << ", " << p->x(1) << ") -> (" << p->interpPos(0) << ", " << p->interpPos(1) << ")\n";
-  /// }
-  /// }
-  /// #endif
-    
   //TODO: Check gradient
 }
 
@@ -360,7 +380,6 @@ void World::particlesToGrid() {
  *      end for
  *****************************/
 void World::computeGridForces() {
-    // TODO: Check Force direction
     {Vector2d *f = frc; for (unsigned int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
 
     for(size_t i = 0; i < particles.size(); i++) {

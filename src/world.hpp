@@ -17,7 +17,7 @@ public:
     
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
-    double m;           //mass
+    double m;                  //mass
     Eigen::Matrix2d gradient;  //deformation gradient
     double rho;         //density
     double vol;         //volume
@@ -62,7 +62,6 @@ public:
     void particlesToGrid();                 //Rasterize_Particle_Data_To_Grid
     void computeGridForces();               //Compute_Grid_Forces
     void updateGridVelocities(double dt);   //Update_Grid_Velocities
-    /// void velocitySolve();
     void updateGradient(double dt);         //Update_Deformation_Gradient
     void gridToParticles(double dt);        //Update_Particle_Velocities and Update_Particle_Positions
 };
