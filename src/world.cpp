@@ -46,13 +46,7 @@ World::World(std::string config) {
 
   auto objectsIn = root["objects"];
   for (auto i : range(objectsIn.size())) {
-    auto typeIn = objectsIn[i]["type"];
-	if (typeIn.size() != 1) {
-	  std::cout<< "bad object type, skipping" << std::endl;
-      std::cout << typeIn.size() << std::endl;
-	  continue;
-	}
-    objType = typeIn[0].asString();
+    objType = objectsIn[i].get("type", "square").asString();
     auto locationIn = objectsIn[i]["location"];
 	if (locationIn.size() != 2) {
 	  std::cout<< "bad object location, skipping" << std::endl;
@@ -68,7 +62,7 @@ World::World(std::string config) {
 	size[0] = sizeIn[0].asDouble();
 	size[1] = sizeIn[1].asDouble();
 	auto resIn = objectsIn[i]["resolution"];
-	if (locationIn.size() != 2) {
+	if (resIn.size() != 2) {
 	  std::cout<< "bad object resolution, skipping" << std::endl;
 	  continue;
 	}
@@ -134,7 +128,6 @@ World::World(std::string config) {
       center = origin;
   }
 
-  Vector2d xGrid = origin + Vector2d(h/2.0,h/2.0);
   if(objType == "square") {
     //Set up particles at each object vertex
     double diffx = size[0] / (ores[0]-1);
