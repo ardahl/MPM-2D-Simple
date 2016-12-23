@@ -50,10 +50,10 @@ double Grid<T>::N(double x) {
 template <typename T>
 double Grid<T>::dN(double x) {
     double ax = std::abs(x);
-    if(ax >= 0.0 && ax < 1.0) {
+    if(ax < 1.0) {
         return 1.5*x*ax - 2.0*x;
     }
-    else if(ax >= 1.0 && ax < 2.0) {
+    else if(ax < 2.0) {
         return (-0.5)*x*ax + 2.0*x - 2.0*(x/ax);
     }
     return 0;

@@ -76,16 +76,16 @@ void display() {
      * Draw the actual stuff
      */
     //Draw grid structure
-    Vector2d x0 = world->x0 - Vector2d(world->h/2.0, world->h/2.0);
-    Vector2d x1 = world->x1 - Vector2d(world->h/2.0, world->h/2.0);
+    Vector2d x0 = world->origin - Vector2d(world->h/2.0, world->h/2.0);
+    Vector2d x1 = world->origin + Vector2d(world->res[0]*h + world->res[1]*h) + Vector2d(world->h/2.0, world->h/2.0);
     Vector2d x10 = x1 - x0;
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
-    for (int i = 0; i < world->m+1; i++) {
-        for (int j = 0; j < world->n+1; j++) {
+    for (int i = 0; i < world->res[0]+1; i++) {
+        for (int j = 0; j < world->res[1]+1; j++) {
             Vector2d gridPos = Vector2d(i, j);
             if(i % 2 == 1) {
-                gridPos = Vector2d(i, world->n-j);
+                gridPos = Vector2d(i, world->res[1]-j);
             }
             Vector2d x = x0 + gridPos*world->h;
             x = x - x0;
@@ -94,11 +94,11 @@ void display() {
     }
     glEnd();
     glBegin(GL_LINE_STRIP);
-    for (int j = 0; j < world->n+1; j++) {
-        for (int i = 0; i < world->m+1; i++) {
+    for (int j = 0; j < world->res[1]+1; j++) {
+        for (int i = 0; i < world->res[0]+1; i++) {
             Vector2d gridPos = Vector2d(i, j);
             if(j % 2 == 1) {
-                gridPos = Vector2d(world->m-i, j);
+                gridPos = Vector2d(world->res[0]-i, j);
             }
             Vector2d x = x0 + gridPos*world->h;
             x = x - x0;
@@ -107,14 +107,14 @@ void display() {
     }
     glEnd();
     //just draw the particles 
-    std::vector<Particle*> ps = world->particles;
+    std::vector<Particle> ps = world->particles;
     glPointSize(5);
     glColor3f(0,0,0);
     glBegin(GL_POINTS);
     for(size_t i = 0; i < ps.size(); i++) {
-        Particle* p = ps[i];
-        glColor3f(p->color(0), p->color(1), p->color(2));
-        glVertex2f((p->x(0)-x0(0))/x10(0), (p->x(1)-x0(1))/x10(1));
+        Particle &p = ps[i];
+        glColor3f(p.color(0), p.color(1), p.color(2));
+        glVertex2f((p.x(0)-x0(0))/x10(0), (p.x(1)-x0(1))/x10(1));
     }
     glEnd();
     

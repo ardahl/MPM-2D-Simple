@@ -1,8 +1,9 @@
 #ifndef MATERIAL_HPP_
 #define MATERIAL_HPP_
 
-#include "grid.hpp"
+#include <Eigen/Dense>
 #include "defines.hpp"
+#include <vector>
 
 class Force;
 
@@ -18,9 +19,11 @@ public:
     Eigen::Vector3d color;
     double m;                  //mass
     Eigen::Matrix2d gradient;  //deformation gradient
-    double rho;                //density
-    double vol;                //volume
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+    double rho;         //density
+    double vol;         //volume
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
+	  x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+    Particle() {}
 };
 
 class World {
@@ -28,25 +31,29 @@ public:
     int stepNum;
     double elapsedTime;
     std::string filename;
-    std::vector<Particle*> particles;
-    std::vector<Force*> forces;
-    Eigen::Vector2d x0, x1;                 //lower left and upper right positions
-    int m, n;                               //Grid dimensions
+    std::vector<Particle> particles;
+    Eigen::Vector2d origin;                 //lower left and upper right positions
+    int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress
     //Structures used for calculations
-    Grid<double> mass;
+    double *mass;
     //No pressure projection, so no staggered grid needed
-    Grid<Eigen::Vector2d> vel, velStar, f;         //previous velocity, new velocity, grid forces
+    Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
 
+    // external forces
+    Eigen::Vector2d gravity;
+    double rotation;
+    bool rotationEnabled, gravityEnabled;
     Eigen::Vector2d center;
+
+
     #ifndef NDEBUG
-    Grid<Eigen::Vector2d> worldPos;
+    Eigen::Vector2d *worldPos;
     #endif
 
     World(std::string config);
-    Eigen::Vector2d getExtForces(double dt, int i, int j);    //External forces for grid cell (i, j)
-    //Functions
+     //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     void getMesh();
     //Perform a step of length dt
@@ -57,27 +64,6 @@ public:
     void updateGridVelocities(double dt);   //Update_Grid_Velocities
     void updateGradient(double dt);         //Update_Deformation_Gradient
     void gridToParticles(double dt);        //Update_Particle_Velocities and Update_Particle_Positions
-};
-
-class Force {
-public:
-    virtual Eigen::Vector2d addForces(World *world, double dt, int i, int j) = 0;
-};
-
-class Gravity : public Force {
-public:
-    Eigen::Vector2d g;
-    bool enabled;
-    Gravity(Eigen::Vector2d g): g(g), enabled(true) {}
-    Eigen::Vector2d addForces(World *world, double dt, int i, int j);
-};
-
-class Rotate : public Force {
-public:
-    Eigen::Vector2d center;
-    double speed; //radians per second
-    Rotate(Eigen::Vector2d center, double speed): center(center), speed(speed) {}
-    Eigen::Vector2d addForces(World *world, double dt, int i, int j);
 };
 
 #endif
