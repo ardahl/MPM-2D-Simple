@@ -1,9 +1,10 @@
 {
 	"objects" : [
 		{
-			"location" : [-1.0, 1.5],
-			"size" : [2.0, 2.0],
-			"resolution" : [100, 100]
+			"location" : [0.0, 1.5],
+			"size" : [1.0, 1.0],
+			"resolution" : [100, 100],
+			"type" : ["circle"]
 		}
 	],
 	"grid" : {
@@ -15,5 +16,5 @@
 	"color" : [1.0, 0.0, 0.0],
 	"lame" : [1.0e6, 1.0e6],
 	"gravity" : [0.0, 0.0],
-	"rotate" : 2.5
+	"rotate" : 5
 }

@@ -4,7 +4,7 @@ project(MPM)
 ###
 # User Options
 ###
-set( CMAKE_BUILD_TYPE Debug )
+set( CMAKE_BUILD_TYPE Release )
 #Source directory
 set( SRC "src")
 #mpm
@@ -25,8 +25,8 @@ set( EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR} )
 #set( LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/build )
 
 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall" )
-set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g")
-set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O3 -DNDEBUG")
+#set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g")
+#set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O3 -DNDEBUG")
 
 ######
 # For the simulation
@@ -88,7 +88,7 @@ endif(MPM_GRAPHICS)
 #Data Dumper
 if(MPM_SIM)
     add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
-endif(MPM_DUMP)
+endif(MPM_SIM)
 #Data viewer
 if(MPM_DUMP_VIEW)
     add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
