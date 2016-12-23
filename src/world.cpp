@@ -41,11 +41,7 @@ World::World(std::string config) {
   double size[2];
   Vector2d object;
   Vector3d c;
-  Vector2d object, grav;
   std::string str, objType = "square";
-
-  x0 = Vector2d(0, 0);
-  Force* frc = NULL;
   int ores[2];
 
   auto objectsIn = root["objects"];
@@ -130,7 +126,6 @@ World::World(std::string config) {
 	rotationEnabled = true;
 	rotation = rotationIn.asDouble();
   }
-  rotspeed = root["rotate"].asDouble();
   if(objType == "square") {
     center = object + (Vector2d(size[0],size[1]) * 0.5);
     origin(0) += h/2.0; origin(1) += h/2.0;
@@ -138,21 +133,17 @@ World::World(std::string config) {
   else if(objType == "circle") {
       center = origin;
   }
-  frc = new Rotate(center, rotspeed);
-  forces.push_back(frc);
 
-  Vector2d xGrid = x0 + Vector2d(h/2.0,h/2.0);
-  x0 = xGrid;
-  x1 = x0 + h*Vector2d(m, n);
+  Vector2d xGrid = origin + Vector2d(h/2.0,h/2.0);
   if(objType == "square") {
     //Set up particles at each object vertex
-    double diffx = l / (ores[0]-1);
-    double diffy = w / (ores[1]-1);
+    double diffx = size[0] / (ores[0]-1);
+    double diffy = size[1] / (ores[1]-1);
     for(int i = 0; i < ores[0]; i++) {
         for(int j = 0; j < ores[1]; j++) {
             Vector2d pos = object + Vector2d(diffx*i, diffy*j);
             Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-            Particle* par = new Particle(pos, Vector2d(0,0), col, pmass);
+            Particle par(pos, Vector2d(0,0), col, pmass);
             particles.push_back(par);
         }
     }
@@ -163,22 +154,22 @@ World::World(std::string config) {
       //square and just using the size vector as radius of the semi-major and semi-minor axes
       //just make a square and reject those outside the ellipse.
       //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
-      double diffx = 2*l / (ores[0]-1);
-      double diffy = 2*w / (ores[1]-1);
+      double diffx = 2*size[0] / (ores[0]-1);
+      double diffy = 2*size[1] / (ores[1]-1);
       for(int i = 0; i < ores[0]; i++) {
         for(int j = 0; j < ores[1]; j++) {
-            Vector2d pos = center - Vector2d(l, w) + Vector2d(diffx*i, diffy*j);
+            Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
             Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
             Vector2d ph = pos - object;
-            if(i == resx/2.0 && j == resy/2.0) {
+            if(i == ores[0]/2.0 && j == ores[1]/2.0) {
                 printf("Pos: (%f, %f)\n", pos(0), pos(1));
                 printf("Obj: (%f, %f)\n", object(0), object(1));
                 printf("ph: (%f, %f)\n", ph(0), ph(1));
-                printf("l, w: %f, %f\n", l, w);
+                printf("l, w: %f, %f\n", size[0], size[1]);
             }
             /// double rx = l/2.0, ry = w/2.0;
-            if( ((ph(0)*ph(0))/(l*l)) + ((ph(1)*ph(1))/(w*w)) < 1+EPS) {
-                Particle* par = new Particle(pos, Vector2d(0,0), col, pmass);
+            if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
+                Particle par(pos, Vector2d(0,0), col, pmass);
                 particles.push_back(par);
             }
         }
