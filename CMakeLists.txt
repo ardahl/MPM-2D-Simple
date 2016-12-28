@@ -66,7 +66,8 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(PARTIO_LIBRARY "partio")
+set(PARTIO_LIBRARY "partio -L/usr/local/lib")
+#set(PARTIO_LIBRARY "partio")
 #zlib library
 set(ZLIB "z")
 
