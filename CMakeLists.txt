@@ -2,8 +2,32 @@ cmake_minimum_required (VERSION 2.6)
 project(MPM)
 
 ###
+# Add build type that uses O3 but includes debugging flag
+###
+SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -O3" CACHE STRING
+    "Flags used by the C++ compiler during optimized debugging builds."
+    FORCE )
+SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -pedantic -O3" CACHE STRING
+    "Flags used by the C compiler during optimized debugging builds."
+    FORCE )
+SET( CMAKE_EXE_LINKER_FLAGS_OPTDEBUG
+    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "Flags used for linking binaries during maintainer builds."
+    FORCE )
+SET( CMAKE_SHARED_LINKER_FLAGS_OPTDEBUG
+    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "Flags used by the shared libraries linker during maintainer builds."
+    FORCE )
+MARK_AS_ADVANCED(
+    CMAKE_CXX_FLAGS_OPTDEBUG
+    CMAKE_C_FLAGS_OPTDEBUG
+    CMAKE_EXE_LINKER_FLAGS_OPTDEBUG
+    CMAKE_SHARED_LINKER_FLAGS_OPTDEBUG )
+
+###
 # User Options
 ###
+# Options are Release, Debug, and Optdebug
 set( CMAKE_BUILD_TYPE Release )
 #Source directory
 set( SRC "src")
@@ -25,8 +49,8 @@ set( EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR} )
 #set( LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/build )
 
 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall" )
-#set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g")
-#set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O3 -DNDEBUG")
+#set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-sign-compare")
+#set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wno-sign-compare")
 
 ######
 # For the simulation
@@ -42,6 +66,9 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+set(PARTIO_LIBRARY "partio")
+#zlib library
+set(ZLIB "z")
 
 ######
 # For the viewer
@@ -74,7 +101,6 @@ endif(NOT OpenCV_FOUND)
 # Sources
 ###
 set (SOURCES
-	${SRC}/configparser.cpp
 	${SRC}/grid.cpp
 	${SRC}/world.cpp
 	${SRC}/jsoncpp.cpp
@@ -83,14 +109,15 @@ set (SOURCES
 #Simulation and Viewer
 if(MPM_GRAPHICS)
     add_executable(mpm_graphics ${SOURCES} ${SRC}/main_graphics.cpp)
-    target_link_libraries(mpm_graphics ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
+    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
 endif(MPM_GRAPHICS)
 #Data Dumper
 if(MPM_SIM)
     add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
+    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB})
 endif(MPM_SIM)
 #Data viewer
 if(MPM_DUMP_VIEW)
     add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 endif(MPM_DUMP_VIEW)

@@ -3,18 +3,18 @@
 		{
 			"location" : [0.0, 1.5],
 			"size" : [1.0, 1.0],
-			"resolution" : [100, 100],
-			"type" : ["circle"]
+			"resolution" : [101, 101],
+			"type" : "circle"
 		}
 	],
 	"grid" : {
 		"origin" : [-2.5, 0.0],
-		"size" : [75, 75],
-		"h" : 0.06666666667
+		"size" : [50, 50],
+		"h" : 0.1
 	},
 	"mass" : 1.0,
 	"color" : [1.0, 0.0, 0.0],
 	"lame" : [1.0e6, 1.0e6],
 	"gravity" : [0.0, 0.0],
-	"rotate" : 5
+	"rotate" : 10
 }

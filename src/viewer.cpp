@@ -56,7 +56,7 @@ bool readAnimation(char *fname, std::vector<Frame> &frames) {
     int nframes;
     unsigned int nparticles;
     double lx, ly, ux, uy;
-    int resx, resy;
+    int resx;//, resy;
 
     std::ifstream in(fname, std::ios::in);
 

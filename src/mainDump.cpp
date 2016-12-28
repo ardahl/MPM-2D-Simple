@@ -13,7 +13,6 @@
 
 #include "defines.hpp"
 #include "mpm.hpp"
-#include "configparser.hpp"
 #include <iostream>
 #include <fstream>
 #include <cstdio>
@@ -39,12 +38,11 @@ int main(int argc, char** argv) {
     
     std::string config = std::string(argv[1]);
     
-    ConfigParser conf(config);
     Material* m = new Material(config);
     m->init();
     
-    int frame = 0, totalFrames = conf.getInt("time")*30;
-    int iters = conf.getInt("iterations");
+    int frame = 0, totalFrames = 7*30;
+    int iters = 2000;
     double itersInv = 1.0/iters;
     //setup
     dumpOut << totalFrames << " " << m->particles.size() << "\n";

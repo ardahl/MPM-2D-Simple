@@ -16,37 +16,38 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles);
 void readParticles(const char *fname, std::vector<Particle> &particles);
 
 int main(int argc, char** argv) {
-  int w = 800, h = 800;                           // size of window in pixels
-  double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
-  int lastTime = 0, prevTime = 0, frame = 0;
-  int seconds = 10*30, curr = 0;
-  bool next = true;
+    int seconds = 2*30, curr = 0;
   
 
-  if(argc < 3) {
-	std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
-	std::exit(0);
-  }
-  std::string outfile = std::string(argv[2]);
+    if(argc < 3) {
+        std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
+        std::exit(0);
+    }
+    std::string outfile = std::string(argv[2]);
 #ifndef NDEBUG
-  std::string dbout = outfile + std::string(".txt");
-  debug.open(dbout.c_str());
+    std::string dbout = outfile + std::string(".txt");
+    debug.open(dbout.c_str());
 #endif
+    std::string parOut = outfile + ".bgeo";
   
-  std::string config = std::string(argv[1]);
-  World world(config);
-  world.init();
+    std::string config = std::string(argv[1]);
+    World world(config);
+    world.init();
   
-  int iters = 4000;
-  double itersInv = 1.0/iters;
-  for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
-	/// printf("Step %d\n", i);
-	world.step((1.0/30.0)*itersInv);
-	printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
-  }
-  printf("\n");
-  
-  return 0;
+    int iters = 2000;
+    double itersInv = 1.0/iters;
+    while(curr < seconds) {
+        curr++;
+        for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
+            world.step((1.0/30.0)*itersInv);
+            printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
+        }
+        printf("\n");
+        
+        std::vector<Particle> pars = world.getParticles();
+        writeParticles(parOut.c_str(), pars);
+    }
+    return 0;
 }
 
 
@@ -80,7 +81,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->attributeInfo("rho", rattr);
 	data->attributeInfo("vol", vattr);
 
-	for (int i=0; i < particles.size(); i++) {
+	for (unsigned int i=0; i < particles.size(); i++) {
 		const Particle &p = particles[i];
 		float *x = data->dataWrite<float>(xattr, i);
 		float *u = data->dataWrite<float>(uattr, i);
@@ -92,7 +93,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		float *v = data->dataWrite<float>(vattr, i);
 
 		x[0] = p.x(0), x[1] = p.x(1);
-		v[0] = p.v(0), v[1] = p.v(1);
+        u[0] = p.v(0), u[1] = p.v(1);
 		s[0] = p.stress(0,0), s[1] = p.stress(0,1), s[2] = p.stress(1,0), s[3] = p.stress(1,1);
 		g[0] = p.gradient(0,0), g[1] = p.gradient(0,1), g[2] = p.gradient(1,0), g[3] = p.gradient(1,1);
 		c[0] = p.color(0), c[1] = p.color(1), s[2] = p.color(2);
@@ -128,7 +129,7 @@ void readParticles(const char *fname, std::vector<Particle> &particles) {
 
 	particles.resize(data->numParticles());
 
-	for (int i=0; i < particles.size(); i++) {
+	for (unsigned int i=0; i < particles.size(); i++) {
 	  Particle &p = particles[i];
 	  if (position) {
 		float *x = data->dataWrite<float>(xattr, i);

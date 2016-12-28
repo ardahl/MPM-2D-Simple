@@ -55,7 +55,7 @@ public:
     World(std::string config);
      //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
-    void getMesh();
+    std::vector<Particle> getParticles() { return particles; }
     //Perform a step of length dt
     void step(double dt);
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities

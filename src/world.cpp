@@ -15,180 +15,182 @@ std::ofstream debug;
 int count = 0;
 #endif
 
-//TODO: Different colored particles
-//TODO: Make circle
-
 //TODO: Check if forces to cells are what you should be getting 
 //applying it to particles
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
 World::World(std::string config) {
-  stepNum = 0;
-  elapsedTime = 0.0;
-  filename = config;
+    stepNum = 0;
+    elapsedTime = 0.0;
+    filename = config;
 
-  std::ifstream ins(filename.c_str());
+    std::ifstream ins(filename.c_str());
   
-  Json::Value root;
-  Json::Reader jReader;
+    Json::Value root;
+    Json::Reader jReader;
 
-  if(!jReader.parse(ins, root)){
-	std::cout << "couldn't read input file: " << filename << '\n'
-			  << jReader.getFormattedErrorMessages() << std::endl;
-	exit(1);
-  }
-  double size[2];
-  Vector2d object;
-  Vector3d c;
-  std::string str, objType = "square";
-  int ores[2];
-
-  auto objectsIn = root["objects"];
-  for (auto i : range(objectsIn.size())) {
-    objType = objectsIn[i].get("type", "square").asString();
-    auto locationIn = objectsIn[i]["location"];
-	if (locationIn.size() != 2) {
-	  std::cout<< "bad object location, skipping" << std::endl;
-	  continue;
-	}
-	object(0) = locationIn[0].asDouble();
-	object(1) = locationIn[1].asDouble();
-	auto sizeIn = objectsIn[i]["size"];
-	if (locationIn.size() != 2) {
-	  std::cout<< "bad object size, skipping" << std::endl;
-	  continue;
-	}
-	size[0] = sizeIn[0].asDouble();
-	size[1] = sizeIn[1].asDouble();
-	auto resIn = objectsIn[i]["resolution"];
-	if (resIn.size() != 2) {
-	  std::cout<< "bad object resolution, skipping" << std::endl;
-	  continue;
-	}
-	ores[0] = resIn[0].asInt();
-	ores[1] = resIn[1].asInt();
-  }
-
-  auto gridIn = root["grid"];
-  {
-	auto originIn = gridIn["origin"];
-	if (originIn.size() != 2) {
-	  std::cout<< "bad grid origin, skipping" << std::endl;
-	} else {
-	  origin = Vector2d(originIn[0].asDouble(),originIn[1].asDouble());
-	}
-	auto sizeIn = gridIn["size"];
-	if (sizeIn.size() != 2) {
-	  std::cout<< "bad grid size, skipping" << std::endl;
-	} else {
-	  res[0] = sizeIn[0].asInt();
-	  res[1] = sizeIn[1].asInt();
-	}
-
-	h = gridIn["h"].asDouble();
-  }
-  double pmass = root["mass"].asDouble();
-  auto colorIn = root["color"];
-  if (colorIn.size() != 3) {
-	std::cout<< "bad color, skipping" << std::endl;
-  } else {
-	c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
-  }
-
-  auto lameIn = root["lame"];
-  if (lameIn.size() != 2) {
-	std::cout<< "bad lame, skipping" << std::endl;
-  } else {
-	lambda = lameIn[0].asDouble();
-	mu = lameIn[1].asDouble();
-  }
-  auto gravityIn = root["gravity"];
-  if (gravityIn.isNull() || gravityIn.size() != 2) {
-	std::cout<< "no gravity" << std::endl;
-	gravityEnabled = false;
-  } else {
-    gravity(0)= gravityIn[0].asDouble();
-    gravity(1)= gravityIn[1].asDouble();
-	gravityEnabled = true;
-  }
-
-  auto rotationIn = root["rotate"];
-  if (rotationIn.isNull()) {
-	rotationEnabled = false;
-  } else {
-	rotationEnabled = true;
-	rotation = rotationIn.asDouble();
-  }
-  if(objType == "square") {
-    center = object + (Vector2d(size[0],size[1]) * 0.5);
-    origin(0) += h/2.0; origin(1) += h/2.0;
-  }
-  else if(objType == "circle") {
-      center = origin;
-  }
-
-  if(objType == "square") {
-    //Set up particles at each object vertex
-    double diffx = size[0] / (ores[0]-1);
-    double diffy = size[1] / (ores[1]-1);
-    for(int i = 0; i < ores[0]; i++) {
-        for(int j = 0; j < ores[1]; j++) {
-            Vector2d pos = object + Vector2d(diffx*i, diffy*j);
-            Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-            Particle par(pos, Vector2d(0,0), col, pmass);
-            particles.push_back(par);
-        }
+    if(!jReader.parse(ins, root)){
+        std::cout << "couldn't read input file: " << filename << '\n'
+                  << jReader.getFormattedErrorMessages() << std::endl;
+        std::exit(1);
     }
-  }
-  if(objType == "circle") {
-      //non-randomly make a circle
-      //technically this is an ellipse because I'm using the same data as the
-      //square and just using the size vector as radius of the semi-major and semi-minor axes
-      //just make a square and reject those outside the ellipse.
-      //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
-      double diffx = 2*size[0] / (ores[0]-1);
-      double diffy = 2*size[1] / (ores[1]-1);
-      for(int i = 0; i < ores[0]; i++) {
-        for(int j = 0; j < ores[1]; j++) {
-            Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
-            Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-            Vector2d ph = pos - object;
-            if(i == ores[0]/2.0 && j == ores[1]/2.0) {
-                printf("Pos: (%f, %f)\n", pos(0), pos(1));
-                printf("Obj: (%f, %f)\n", object(0), object(1));
-                printf("ph: (%f, %f)\n", ph(0), ph(1));
-                printf("l, w: %f, %f\n", size[0], size[1]);
-            }
-            /// double rx = l/2.0, ry = w/2.0;
-            if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
+    double size[2] = {0.0, 0.0};
+    Vector2d object;
+    Vector3d c;
+    std::string str, objType = "square";
+    int ores[2] = {1, 1};
+
+    auto objectsIn = root["objects"];
+    for (auto i : range(objectsIn.size())) {
+        objType = objectsIn[i].get("type", "square").asString();
+        auto locationIn = objectsIn[i]["location"];
+        if (locationIn.size() != 2) {
+            std::cout<< "bad object location, skipping" << std::endl;
+            continue;
+        }
+        object(0) = locationIn[0].asDouble();
+        object(1) = locationIn[1].asDouble();
+        auto sizeIn = objectsIn[i]["size"];
+        if (locationIn.size() != 2) {
+            std::cout<< "bad object size, skipping" << std::endl;
+            continue;
+        }
+        size[0] = sizeIn[0].asDouble();
+        size[1] = sizeIn[1].asDouble();
+        auto resIn = objectsIn[i]["resolution"];
+        if (resIn.size() != 2) {
+            std::cout<< "bad object resolution, skipping" << std::endl;
+            continue;
+        }
+        ores[0] = resIn[0].asInt();
+        ores[1] = resIn[1].asInt();
+    }
+
+    auto gridIn = root["grid"]; 
+    {
+        auto originIn = gridIn["origin"];
+        if (originIn.size() != 2) {
+            std::cout<< "bad grid origin, skipping" << std::endl;
+        } 
+        else {
+            origin = Vector2d(originIn[0].asDouble(),originIn[1].asDouble());
+        }
+        auto sizeIn = gridIn["size"];
+        if (sizeIn.size() != 2) {
+            std::cout<< "bad grid size, skipping" << std::endl;
+        } 
+        else {
+            res[0] = sizeIn[0].asInt();
+            res[1] = sizeIn[1].asInt();
+        }
+        h = gridIn["h"].asDouble();
+    }
+  
+    double pmass = root["mass"].asDouble();
+    auto colorIn = root["color"];
+    if (colorIn.size() != 3) {
+        std::cout<< "bad color, skipping" << std::endl;
+    } 
+    else {
+        c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
+    }
+
+    auto lameIn = root["lame"];
+    if (lameIn.size() != 2) {
+        std::cout<< "bad lame, skipping" << std::endl;
+    } 
+    else {
+        lambda = lameIn[0].asDouble();
+        mu = lameIn[1].asDouble();
+    }
+    auto gravityIn = root["gravity"];
+    if (gravityIn.isNull() || gravityIn.size() != 2) {
+        std::cout<< "no gravity" << std::endl;
+        gravityEnabled = false;
+    }
+    else {
+        gravity(0)= gravityIn[0].asDouble();
+        gravity(1)= gravityIn[1].asDouble();
+        gravityEnabled = true;
+    }
+
+    auto rotationIn = root["rotate"];
+    if (rotationIn.isNull()) {
+        rotationEnabled = false;
+        rotation = 0;
+    } 
+    else {
+        rotationEnabled = true;
+        rotation = rotationIn.asDouble();
+    }
+  
+    origin(0) += h/2.0; origin(1) += h/2.0;
+    if(objType == "square") {
+        center = object + (Vector2d(size[0],size[1]) * 0.5);
+        //Set up particles at each object vertex
+        double diffx = size[0] / (ores[0]-1);
+        double diffy = size[1] / (ores[1]-1);
+        for(int i = 0; i < ores[0]; i++) {
+            for(int j = 0; j < ores[1]; j++) {
+                Vector2d pos = object + Vector2d(diffx*i, diffy*j);
+                Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Particle par(pos, Vector2d(0,0), col, pmass);
                 particles.push_back(par);
             }
         }
-      }
-  }
+    }
+    if(objType == "circle") {
+        printf("Making Circle\n");
+        center = object;
+        //non-randomly make a circle
+        //technically this is an ellipse because I'm using the same data as the
+        //square and just using the size vector as radius of the semi-major and semi-minor axes
+        //just make a square and reject those outside the ellipse.
+        //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
+        double diffx = 2*size[0] / (ores[0]-1);
+        double diffy = 2*size[1] / (ores[1]-1);
+        for(int i = 0; i < ores[0]; i++) {
+            for(int j = 0; j < ores[1]; j++) {
+                Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
+                Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
+                Vector2d ph = pos - object;
+                if(i == ores[0]/2 && j == ores[1]/2) {
+                    printf("Pos: %f, %f\n", pos(0), pos(1));
+                    printf("ph: %f, %f\n", ph(0), ph(1));
+                    printf("diff: %f, %f\n", diffx, diffy);
+                    printf("size: %f, %f\n", size[0], size[1]);
+                    printf("ores: %d, %d\n", ores[0], ores[1]);
+                }
+                if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
+                    Particle par(pos, Vector2d(0,0), col, pmass);
+                    particles.push_back(par);
+                }
+            }
+        }
+    }
   
-  //Average position for center of mass
-  Vector2d avePos = Vector2d::Zero();
-  for(size_t i = 0; i < particles.size(); i++) {
-	avePos += particles[i].x;
-  }
-  avePos /= particles.size();
+    //Average position for center of mass
+    Vector2d avePos = Vector2d::Zero();
+    for(size_t i = 0; i < particles.size(); i++) {
+        avePos += particles[i].x;
+    }
+    avePos /= particles.size();
   
-  printf("Number of particles: %d\n", (int)particles.size());
-  printf("Dimentions: %dx%d\n", res[0], res[1]);
-  printf("Grid Spacing: %f\n", h);
-  printf("Lame Constants: %f, %f\n", lambda, mu);
-  printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
-  printf("Center of Mass: (%f, %f), (%f, %f)\n", center(0), center(1), avePos(0), avePos(1));
-  printf("X0: (%f, %f)\n", origin(0), origin(1));
-  printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
-  mass = new double[res[0]*res[1]];
-  vel = new Vector2d[res[0]*res[1]];
-  velStar = new Vector2d[res[0]*res[1]];
-  frc = new Vector2d[res[0]*res[1]];
-  //TODO: Check gradient
+    printf("Number of particles: %d\n", (int)particles.size());
+    printf("Dimentions: %dx%d\n", res[0], res[1]);
+    printf("Grid Spacing: %f\n", h);
+    printf("Lame Constants: %f, %f\n", lambda, mu);
+    printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
+    printf("Center of Mass: (%f, %f), (%f, %f)\n", center(0), center(1), avePos(0), avePos(1));
+    printf("Rotation: %f\n", rotation);
+    printf("X0: (%f, %f)\n", origin(0), origin(1));
+    printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
+    mass = new double[res[0]*res[1]];
+    vel = new Vector2d[res[0]*res[1]];
+    velStar = new Vector2d[res[0]*res[1]];
+    frc = new Vector2d[res[0]*res[1]];
+    //TODO: Check gradient
 }
 
 void World::init() {
@@ -196,17 +198,18 @@ void World::init() {
 }
 
 inline double weight(double x) {
-    if(x < 1.0) {
-        return 0.5*x*x*x - x*x + (2.0/3.0);
-    } else if(x < 2.0) {
-        return (-1.0/6.0)*x*x*x + x*x - 2.0*x + (4.0/3.0);
+    double ax = std::abs(x);
+    if(ax < 1.0) {
+        return 0.5*ax*ax*ax - x*x + (2.0/3.0);
+    } else if(ax < 2.0) {
+        return (-1.0/6.0)*ax*ax*ax + x*x - 2.0*ax + (4.0/3.0);
     }
     return 0;
 }
 
 inline double gradweight1d(double x) {
     double ax = std::abs(x);
-    if(x < 1.0) {
+    if(ax < 1.0) {
         return 1.5*x*ax - 2.0*x;
     } else if(ax < 2.0) {
         return (-0.5)*x*ax + 2.0*x - 2.0*(x/ax);
@@ -216,15 +219,15 @@ inline double gradweight1d(double x) {
 
 inline Vector2d gradweight(const Vector2d &offset, double h) {
 	return Vector2d(gradweight1d(offset(0))*weight(offset(1))/h, 
-		weight(offset(0))*gradweight1d(offset(1))/h);
+                    weight(offset(0))*gradweight1d(offset(1))/h);
 }
 
 
 inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *ybounds) {
-  xbounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(0))) - 1);
-  xbounds[1] = std::min(res[0]-1, ((int)std::floor(2.0 + offset(0))) + 1);
-  ybounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(1))) - 1);
-  ybounds[1] = std::min(res[1]-1, ((int)std::floor(2.0 + offset(1))) + 1);
+    xbounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(0))) - 1);
+    xbounds[1] = std::min(res[0]-1, ((int)std::floor(2.0 + offset(0))) + 1);
+    ybounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(1))) - 1);
+    ybounds[1] = std::min(res[1]-1, ((int)std::floor(2.0 + offset(1))) + 1);
 }
 
 
@@ -250,9 +253,9 @@ void World::particleVolumesDensities() {
 		int xbounds[2], ybounds[2];
 		bounds(offset, res, xbounds, ybounds);
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
-		  double w1 = weight(offset(0) - j);
+            double w1 = weight(offset(0) - j);
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
-			  double r = mass[j*res[1] + k] * w1 * weight(offset(1) - k);
+                double r = mass[j*res[1] + k] * w1 * weight(offset(1) - k);
                 p.rho += r;
             }
         }
@@ -312,8 +315,8 @@ void World::step(double dt) {
  *
  *****************************/
 void World::particlesToGrid() {
-    {Vector2d *v = vel; for (unsigned int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
-    {double *m = mass; for (unsigned int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
+    {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
+    {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
 
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
@@ -364,7 +367,7 @@ void World::particlesToGrid() {
  *      end for
  *****************************/
 void World::computeGridForces() {
-    {Vector2d *f = frc; for (unsigned int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
+    {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
@@ -378,7 +381,7 @@ void World::computeGridForces() {
 		bounds(offset, res, xbounds, ybounds);
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
-			  Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-i,offset(1)-j),h);
+                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-i,offset(1)-j),h);
                 frc[j*res[1] + k] -= accumF;
                 #ifndef NDEBUG
                 if(frc[j*res[1] + k].hasNaN()) {
@@ -406,18 +409,18 @@ void World::updateGridVelocities(double dt) {
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
-		  int index = i*res[1] + j;
-		  if(mass[index] < EPS) {
+            int index = i*res[1] + j;
+            if(mass[index] < EPS) {
                 velStar[index] = Vector2d(0, 0);
             }
             else {
 			    Vector2d extfrc(0.0,0.0);
-				if (gravityEnabled) {
-				  extfrc += mass[index]*gravity;
+				if(gravityEnabled) {
+                    extfrc += mass[index]*gravity;
 				}
-				if (rotationEnabled) {
-				  Vector2d d = origin+Vector2d(h*i,h*j)-center;
-				  extfrc += rotation*Vector2d(-d(1), d(0));
+				if(rotationEnabled) {
+                    Vector2d d = origin+Vector2d(h*i,h*j)-center;
+                    extfrc += rotation*Vector2d(-d(1), d(0));
 				}
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
             }

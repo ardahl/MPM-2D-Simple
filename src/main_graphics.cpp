@@ -53,10 +53,9 @@ void display() {
         exit(0);
     }
     //Perform step
-    int iters = 2000;
+    int iters = 4000;
     double itersInv = 1.0/iters;
-    for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
-        /// printf("Step %d\n", i);
+    for(int i = 0; i < iters; i++) {
         world->step((1.0/30.0)*itersInv);
         printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
 		std::cout<<std::flush;
@@ -76,10 +75,8 @@ void display() {
      */
     //Draw grid structure
     Vector2d x0 = world->origin - Vector2d(world->h/2.0, world->h/2.0);
-    Vector2d x1 = world->origin + Vector2d(world->res[0]*world->h, world->res[1]*world->h) + Vector2d(world->h/2.0, world->h/2.0);
-	std::cout<<x0(0)<<" "<<x0(1)<<" "<<" "<<x1(0)<<" "<<x1(1)<<std::endl;
+    Vector2d x1 = x0 + Vector2d(world->res[0]*world->h, world->res[1]*world->h);
     Vector2d x10 = x1 - x0;
-	std::cout<<x10(0)<<" "<<x10(1)<<" "<<std::endl;
     glColor3f(0.8, 0.8, 0.8);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < world->res[0]+1; i++) {

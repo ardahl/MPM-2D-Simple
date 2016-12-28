@@ -5,7 +5,7 @@ ifeq ($(UNAME), Darwin) # Mac
 	CXX := c++ -std=c++11
 
 else # Linux?
-	LDFLAGS := -lglut -lGLU -lGL -fopenmp `pkg-config --libs opencv`
+	LDFLAGS := -lglut -lGLU -lGL -fopenmp `pkg-config --libs opencv` -lpartio -lz
 	CXXFLAGS := -Wall -g -Wno-sign-compare -I/usr/include/eigen3 -I/opt/local/include/eigen3 -fopenmp -O3 `pkg-config --cflags opencv`
 	CXX := g++ -std=c++11
 endif
