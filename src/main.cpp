@@ -5,6 +5,7 @@
 #include <fstream>
 #include <cstdio>
 #include <Partio.h>
+#include <iomanip>
 
 using namespace Eigen;
 
@@ -16,8 +17,9 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles);
 void readParticles(const char *fname, std::vector<Particle> &particles);
 
 int main(int argc, char** argv) {
-    int seconds = 2*30, curr = 0;
-  
+	double timeSinceLastFrame = 1.0;
+	int frame = 0;
+	int iters = 0;
 
     if(argc < 3) {
         std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
@@ -28,25 +30,30 @@ int main(int argc, char** argv) {
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());
 #endif
-    std::string parOut = outfile + ".bgeo";
   
     std::string config = std::string(argv[1]);
     World world(config);
     world.init();
   
-    int iters = 2000;
-    double itersInv = 1.0/iters;
-    while(curr < seconds) {
-        curr++;
-        for(int i = 0; i < iters; i++) {    //Hardcode for 30fps with dt of (1/3)e-5
-            world.step((1.0/30.0)*itersInv);
-            printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
-        }
-        printf("\n");
-        
-        std::vector<Particle> pars = world.getParticles();
-        writeParticles(parOut.c_str(), pars);
-    }
+	while (world.elapsedTime < world.totalTime) {
+	  if (timeSinceLastFrame > 1.0/30.0) {
+   	    std::ostringstream ss;
+		ss << std::setw(5) << std::setfill('0') << frame;
+		std::string pframe(ss.str());
+		std::string parOut = outfile + "." + pframe + ".bgeo";
+        writeParticles(parOut.c_str(), world.particles);
+		frame++;
+		iters = 0;
+	  }
+	  
+	  world.step();
+	  timeSinceLastFrame += world.dt;
+	  iters++;
+
+	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(30.0/world.dt));
+	  std::cout<<std::flush;
+	}
+
     return 0;
 }
 

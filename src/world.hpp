@@ -29,7 +29,7 @@ public:
 class World {
 public:
     int stepNum;
-    double elapsedTime;
+    double elapsedTime, dt, totalTime;
     std::string filename;
     std::vector<Particle> particles;
     Eigen::Vector2d origin;                 //lower left and upper right positions
@@ -57,13 +57,13 @@ public:
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     std::vector<Particle> getParticles() { return particles; }
     //Perform a step of length dt
-    void step(double dt);
+  void step();
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities
     void particlesToGrid();                 //Rasterize_Particle_Data_To_Grid
     void computeGridForces();               //Compute_Grid_Forces
-    void updateGridVelocities(double dt);   //Update_Grid_Velocities
-    void updateGradient(double dt);         //Update_Deformation_Gradient
-    void gridToParticles(double dt);        //Update_Particle_Velocities and Update_Particle_Positions
+    void updateGridVelocities();            //Update_Grid_Velocities
+    void updateGradient();                  //Update_Deformation_Gradient
+    void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
 };
 
 #endif

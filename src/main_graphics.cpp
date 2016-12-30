@@ -14,8 +14,9 @@ using namespace Eigen;
 int width = 800, height = 800;                           // size of window in pixels
 double xmin = 0, xmax = 1, ymin = 0, ymax = 1; // range of coordinates drawn
 int lastTime = 0, prevTime = 0, frame = 0;
-int seconds = 7*30, curr = 0;
 bool next = true;
+double timeSinceLastFrame = 1.0;
+int iters = 0;
 
 cv::Mat img(height, width, CV_8UC3);
 cv::Mat flipped(height, width, CV_8UC3);
@@ -44,22 +45,17 @@ void onKey(unsigned char key, int x, int y) {
 }
 
 void display() {
-    curr++;
-    if(curr > seconds) {
-        printf("\nRender Done\n");
-        #ifndef NDEBUG
-        debug.close();
-        #endif
-        exit(0);
-    }
+	if (timeSinceLastFrame < 1.0/30.0) 
+	  return;
+
+	timeSinceLastFrame = 0.0;
+	iters = 0;
+	frame++;
+
     //Perform step
-    int iters = 4000;
-    double itersInv = 1.0/iters;
-    for(int i = 0; i < iters; i++) {
-        world->step((1.0/30.0)*itersInv);
-        printf("Frame %d/%d Step: %d/%d\r", curr, seconds, i+1, iters);
-		std::cout<<std::flush;
-    }
+    //int iters = 4000;
+    //double itersInv = 1.0/iters;
+
     printf("\n");
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -125,7 +121,13 @@ void display() {
 }
 
 void idle() {
-    glutPostRedisplay();
+    world->step();
+    timeSinceLastFrame += world->dt;
+	iters++;
+
+	printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world->totalTime), iters, (int)(1.0/(30.0*world->dt)));
+    std::cout<<std::flush;
+	glutPostRedisplay();
 }
 
 int main(int argc, char** argv) {

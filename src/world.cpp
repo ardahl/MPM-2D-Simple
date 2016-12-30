@@ -41,6 +41,9 @@ World::World(std::string config) {
     std::string str, objType = "square";
     int ores[2] = {1, 1};
 
+	dt = root.get("dt", 1.0/30.0).asDouble();
+	totalTime = root.get("totalTime", 5.0).asDouble();
+
     auto objectsIn = root["objects"];
     for (auto i : range(objectsIn.size())) {
         objType = objectsIn[i].get("type", "square").asString();
@@ -163,7 +166,8 @@ World::World(std::string config) {
                     printf("ores: %d, %d\n", ores[0], ores[1]);
                 }
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-                    Particle par(pos, Vector2d(0,0), col, pmass);
+				    Particle par(pos, Vector2d(0,0), col, pmass);
+                    //Particle par(pos, pos, col, pmass);
                     particles.push_back(par);
                 }
             }
@@ -288,13 +292,14 @@ void World::particleVolumesDensities() {
  *      Update_Particle_Velocities
  *      Update_Particle_Positions
  ******************************/
-void World::step(double dt) {
+void World::step() {
     particlesToGrid();
     computeGridForces();
-    updateGridVelocities(dt);
-    updateGradient(dt);
-    gridToParticles(dt);
+    updateGridVelocities();
+    updateGradient();
+    gridToParticles();
     stepNum++;
+	elapsedTime += dt;
 }
 
 /******************************
@@ -333,8 +338,10 @@ void World::particlesToGrid() {
         }
 	}
     /// #pragma omp parallel for collapse(2)
+	double tmass = 0.0;
 	for(int i = 0; i < res[0]; i++) {
 		for(int j = 0; j < res[1]; j++) {
+		  tmass += mass[i*res[1]+j];
             if(mass[i*res[1] + j] < EPS) {
                 vel[i*res[1] + j] = Vector2d(0.0, 0.0);
             }
@@ -405,7 +412,7 @@ void World::computeGridForces() {
  *          v^*_i = v_i^n + (dt * f_i)/m_i + dt * g
  *      end for
  *****************************/
-void World::updateGridVelocities(double dt) {
+void World::updateGridVelocities() {
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
@@ -420,9 +427,10 @@ void World::updateGridVelocities(double dt) {
 				}
 				if(rotationEnabled) {
                     Vector2d d = origin+Vector2d(h*i,h*j)-center;
-                    extfrc += rotation*Vector2d(-d(1), d(0));
+                    extfrc += mass[index]*rotation*Vector2d(-d(1), d(0));
 				}
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
+                //velStar[index] = vel[index] + dt * (1.0/mass[index]) * (extfrc); //dt*g
             }
             #ifndef NDEBUG
 		    if(velStar[i*res[1] + j].hasNaN()) {
@@ -446,7 +454,7 @@ void World::updateGridVelocities(double dt) {
  *          F_p,n+1 *= f_p,n+1
  *      end for
  *****************************/
-void World::updateGradient(double dt) {
+void World::updateGradient() {
     /// #pragma omp parallel for 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
@@ -502,9 +510,14 @@ void World::updateGradient(double dt) {
  *          x_p += dt * v_p
  *      end for
  *****************************/
-void World::gridToParticles(double dt) {
+void World::gridToParticles() {
     double alpha = 0.95;
     /// #pragma omp parallel for
+	Vector2d com(0.0,0.0);
+    for(size_t i = 0; i < particles.size(); i++) {
+	  com += particles[i].x;
+	}
+	com /= particles.size();
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
@@ -541,6 +554,7 @@ void World::gridToParticles(double dt) {
 		p.v = (alpha * flip) + ((1 - alpha) * pic);
         //Mass proportional damping
         p.v *= 0.99999;
+		//std::cout<<p.x(0)-com(0)<<" "<<p.x(1)-com(1)<<" "<<p.v(0)<<" "<<p.v(1)<<std::endl;
         #ifndef NDEBUG
         if(p.v.hasNaN()) {
             printf("Vel has NaN\n");
