@@ -19,8 +19,12 @@ public:
     Eigen::Vector3d color;
     double m;                  //mass
     Eigen::Matrix2d gradient;  //deformation gradient
+    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
+    Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     double rho;         //density
     double vol;         //volume
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
 	  x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
     Particle() {}

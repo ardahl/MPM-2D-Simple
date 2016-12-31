@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <algorithm>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -371,8 +372,9 @@ void World::computeGridForces() {
 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
-        double J = p.gradient.determinant();
-        Matrix2d eps = 0.5 * (p.gradient.transpose() * p.gradient - Matrix2d::Identity());
+        Matrix2d gradient = p.gradientE*p.gradientP; 
+        double J = gradient.determinant();
+        Matrix2d eps = 0.5 * (gradient.transpose() * gradient - Matrix2d::Identity());
         double trace = eps.trace();
         Matrix2d stress = lambda*trace*Matrix2d::Identity() + 2.0*mu*eps;
 
@@ -388,7 +390,7 @@ void World::computeGridForces() {
                     printf("\nf NaN at (%d, %d)\n", j, k);
                     std::cout << "Force:\n" << frc[j*res[1] + k] << std::endl;
                     std::cout << "Volume: " << p.vol << std::endl;
-                    std::cout << "Determinant: " << p.gradient.determinant() << std::endl;
+                    std::cout << "Determinant: " << gradient.determinant() << std::endl;
                     std::cout << "Stress:\n" << p.stress << std::endl;
                     std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-i, offset(1)-j),h) << std::endl;
                     exit(0);
@@ -481,7 +483,21 @@ void World::updateGradient(double dt) {
         }
         #endif
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
-        p.gradient = fp*p.gradient;
+        Matrix2d tempGradE = fp*p.gradientE;
+        Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
+        
+        JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
+        
+        Matrix2d svdU = svd.matrixU();
+        Vector2d svdSV = svd.singularValues();
+        matrix2d svdV = svd.matrixV();
+        
+        Vector2d sVClamped;
+        sVClamped << std::clamp(svdSV(0), 1-p.compression, 1+p.stretch), std::clamp(svdSV(1), 1-p.compression, 1+p.stretch);
+        Matrix2D svdClamped = sVClamped.asDiagonal();
+        
+        p.gradientE = svdU * svdClamped * svdV.transpose();
+        p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
     }
 }
 
