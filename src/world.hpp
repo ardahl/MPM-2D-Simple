@@ -66,4 +66,7 @@ public:
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
 };
 
+void writeParticles(const char *fname, const std::vector<Particle> &particles);
+void readParticles(const char *fname, std::vector<Particle> &particles);
+
 #endif
