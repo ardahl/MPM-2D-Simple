@@ -483,7 +483,10 @@ void World::updateGradient(double dt) {
         }
         #endif
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
+        
         Matrix2d tempGradE = fp*p.gradientE;
+        
+        #ifndef ELASTIC_ONLY
         Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
         
         JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
@@ -498,6 +501,10 @@ void World::updateGradient(double dt) {
         
         p.gradientE = svdU * svdClamped * svdV.transpose();
         p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
+        #else 
+        p.gradientE = tempGradE;
+        p.gradientP = Matrix2d::Identity();
+        #endif
     }
 }
 
