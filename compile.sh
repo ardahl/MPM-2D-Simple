@@ -1,6 +1,6 @@
 #!/bin/bash
 mkdir -p build
 cd build
-cmake ..
+cmake -Wno-dev ..
 make
 cd ..
