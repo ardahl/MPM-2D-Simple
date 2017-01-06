@@ -5,6 +5,7 @@
 #include <limits>
 #include <cmath>
 #include <Partio.h>
+#include <Eigen/Geometry>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -136,7 +137,9 @@ World::World(std::string config) {
         rotationEnabled = true;
         rotation = rotationIn.asDouble();
     }
-  
+    #ifndef NDEBUG
+    m = 0;
+    #endif
     if(objType == "square") {
         center = object + (Vector2d(size[0],size[1]) * 0.5);
         //Set up particles at each object vertex
@@ -148,6 +151,9 @@ World::World(std::string config) {
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Particle par(pos, Vector2d(0,0), col, pmass);
                 particles.push_back(par);
+                #ifndef NDEBUG
+                m += pmass;
+                #endif
             }
         }
     }
@@ -166,17 +172,13 @@ World::World(std::string config) {
                 Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Vector2d ph = pos - object;
-                if(i == ores[0]/2 && j == ores[1]/2) {
-                    printf("Pos: %f, %f\n", pos(0), pos(1));
-                    printf("ph: %f, %f\n", ph(0), ph(1));
-                    printf("diff: %f, %f\n", diffx, diffy);
-                    printf("size: %f, %f\n", size[0], size[1]);
-                    printf("ores: %d, %d\n", ores[0], ores[1]);
-                }
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
 				    Particle par(pos, Vector2d(0,0), col, pmass);
                     //Particle par(pos, pos, col, pmass);
                     particles.push_back(par);
+                    #ifndef NDEBUG
+                    m += pmass;
+                    #endif
                 }
             }
         }
@@ -205,6 +207,10 @@ World::World(std::string config) {
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
     //TODO: Check gradient
+    
+    #ifndef NDEBUG
+    angle = 0;
+    #endif
 }
 
 void World::init() {
@@ -398,7 +404,7 @@ void World::computeGridForces() {
 		bounds(offset, res, xbounds, ybounds);
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-i,offset(1)-j),h);
+                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-j,offset(1)-k),h);
                 frc[j*res[1] + k] -= accumF;
                 #ifndef NDEBUG
                 if(frc[j*res[1] + k].hasNaN()) {
@@ -407,7 +413,7 @@ void World::computeGridForces() {
                     std::cout << "Volume: " << p.vol << std::endl;
                     std::cout << "Determinant: " << p.gradient.determinant() << std::endl;
                     std::cout << "Stress:\n" << p.stress << std::endl;
-                    std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-i, offset(1)-j),h) << std::endl;
+                    std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-j, offset(1)-k),h) << std::endl;
                     exit(0);
                 }
                 #endif
@@ -440,7 +446,6 @@ void World::updateGridVelocities() {
                     extfrc += mass[index]*rotation*Vector2d(-d(1), d(0));
 				}
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
-                //velStar[index] = vel[index] + dt * (1.0/mass[index]) * (extfrc); //dt*g
             }
             #ifndef NDEBUG
 		    if(velStar[i*res[1] + j].hasNaN()) {
@@ -481,13 +486,13 @@ void World::updateGradient() {
                     std::cout << velStar[index] << std::endl;
                     exit(0);
                 }
-                if(gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose().hasNaN()) {
+                if(gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose().hasNaN()) {
                     printf("gradV gradW has NaN at (%d, %d)\n", j, k);
-                    std::cout << gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose() << std::endl;
+                    std::cout << gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose() << std::endl;
                     exit(0);
                 }
                 #endif
-                Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose();
+                Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose();
                 gradV += accumGrad;
             }
         }
@@ -501,6 +506,16 @@ void World::updateGradient() {
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
         p.gradient = fp*p.gradient;
     }
+    #ifndef NDEBUG
+    double diffNorm = 0;
+    angle += rotation*dt*(M_PI/2.0)/m;
+    Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
+    for(unsigned int i = 0; i < particles.size(); i++) {
+        Matrix2d diff = particles[i].gradient - rotM;
+        diffNorm += diff.norm();
+    }
+    debug << elapsedTime << " " << diffNorm;
+    #endif
 }
 
 /******************************
@@ -528,6 +543,9 @@ void World::gridToParticles() {
 	  com += particles[i].x;
 	}
 	com /= particles.size();
+    #ifndef NDEBUG
+    double normDiff = 0;
+    #endif
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
@@ -564,7 +582,6 @@ void World::gridToParticles() {
 		p.v = (alpha * flip) + ((1 - alpha) * pic);
         //Mass proportional damping
         p.v *= 0.99999;
-		//std::cout<<p.x(0)-com(0)<<" "<<p.x(1)-com(1)<<" "<<p.v(0)<<" "<<p.v(1)<<std::endl;
         #ifndef NDEBUG
         if(p.v.hasNaN()) {
             printf("Vel has NaN\n");
@@ -575,6 +592,13 @@ void World::gridToParticles() {
 
         //Update Positions
         p.x += dt * p.v;
+        #ifndef NDEBUG
+        p.x1 = p.gradient * p.x0;
+        Vector2d diff = p.x - p.x1;
+        normDiff += diff.norm();
+        /// p.x = p.x1;
+        #endif
+        
         #ifndef NDEBUG
         if(p.x.hasNaN()) {
             printf("Pos has NaN\n");
@@ -606,6 +630,9 @@ void World::gridToParticles() {
             p.v(1) *= -1;
         }
     }
+    #ifndef NDEBUG
+    debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
+    #endif
 }
 
 
@@ -697,8 +724,8 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 		p.x = Vector2d(0.0, 0.0);
 	  }
 	  if (velocity) {
-		float *v = data->dataWrite<float>(uattr, i);
-		p.v[0] = v[0], p.v[1] = v[1];
+		float *u = data->dataWrite<float>(uattr, i);
+		p.v[0] = u[0], p.v[1] = u[1];
 	  } else {
 		p.v = Vector2d(0.0, 0.0);
 		}

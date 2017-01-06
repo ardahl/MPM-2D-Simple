@@ -123,10 +123,27 @@ void display() {
 void idle() {
     world->step();
     timeSinceLastFrame += world->dt;
-	iters++;
-
+    
+    if(frame % 30 == 0) {
+        std::ofstream gradOut("grad.txt", std::ios_base::app);
+        double norm = 0;
+        for(size_t i = 0; i < world->particles.size(); i++) {
+            norm += world->particles[i].gradient.norm();
+        }
+        gradOut << norm << "\n";
+        gradOut.close();
+    }
+    int totFrames = (int)(30.0*world->totalTime);
+    if(frame == totFrames+1) {
+        printf("\n");
+        #ifndef NDEBUG
+        debug.close();
+        #endif
+        std::exit(0);
+    }
 	printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world->totalTime), iters, (int)(1.0/(30.0*world->dt)));
     std::cout<<std::flush;
+    iters++;
 	glutPostRedisplay();
 }
 

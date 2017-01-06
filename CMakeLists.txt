@@ -28,7 +28,7 @@ MARK_AS_ADVANCED(
 # User Options
 ###
 # Options are Release, Debug, and Optdebug
-set( CMAKE_BUILD_TYPE Release )
+set( CMAKE_BUILD_TYPE Optdebug )
 #Source directory
 set( SRC "src")
 #mpm

@@ -11,6 +11,7 @@ class Particle {
 public:
     #ifndef NDEBUG
     Eigen::Vector2d interpPos;
+    Eigen::Vector2d x0, x1;
     #endif
     //Temp
     Eigen::Matrix2d stress;
@@ -22,7 +23,11 @@ public:
     double rho;         //density
     double vol;         //volume
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+	  x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
+          #ifndef NDEBUG
+          x0 = x;
+          #endif
+      }
     Particle() {}
 };
 
@@ -47,9 +52,11 @@ public:
     bool rotationEnabled, gravityEnabled;
     Eigen::Vector2d center;
 
-
+    //Debugging stuff
     #ifndef NDEBUG
     Eigen::Vector2d *worldPos;
+    double angle;
+    double m;
     #endif
 
     World(std::string config);
@@ -57,7 +64,7 @@ public:
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     std::vector<Particle> getParticles() { return particles; }
     //Perform a step of length dt
-  void step();
+    void step();
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities
     void particlesToGrid();                 //Rasterize_Particle_Data_To_Grid
     void computeGridForces();               //Compute_Grid_Forces
