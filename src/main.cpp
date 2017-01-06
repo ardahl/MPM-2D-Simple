@@ -95,7 +95,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		x[0] = p.x(0), x[1] = p.x(1);
         u[0] = p.v(0), u[1] = p.v(1);
 		s[0] = p.stress(0,0), s[1] = p.stress(0,1), s[2] = p.stress(1,0), s[3] = p.stress(1,1);
-		g[0] = p.gradient(0,0), g[1] = p.gradient(0,1), g[2] = p.gradient(1,0), g[3] = p.gradient(1,1);
+		g[0] = p.gradientE(0,0), g[1] = p.gradientE(0,1), g[2] = p.gradientE(1,0), g[3] = p.gradientE(1,1);
 		c[0] = p.color(0), c[1] = p.color(1), s[2] = p.color(2);
 		m[0] = p.m;
 		r[0] = p.rho;
@@ -151,9 +151,9 @@ void readParticles(const char *fname, std::vector<Particle> &particles) {
 	  }
 	  if (gradient) {
 		float *g = data->dataWrite<float>(gattr, i);
-		p.gradient(0,0) = g[0], p.gradient(0,1) = g[1], p.gradient(1,0) = g[2], p.gradient(1,1) = g[3];
+		p.gradientE(0,0) = g[0], p.gradientE(0,1) = g[1], p.gradientE(1,0) = g[2], p.gradientE(1,1) = g[3];
 	  } else {
-		p.gradient = Matrix2d::Identity();
+		p.gradientE = Matrix2d::Identity();
 	  }
 	  if (color) {
 		float *c = data->dataWrite<float>(cattr, i);
