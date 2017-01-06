@@ -67,6 +67,6 @@ public:
 };
 
 void writeParticles(const char *fname, const std::vector<Particle> &particles);
-void readParticles(const char *fname, std::vector<Particle> &particles);
+bool readParticles(const char *fname, std::vector<Particle> &particles);
 
 #endif

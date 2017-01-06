@@ -120,5 +120,5 @@ endif(MPM_SIM)
 #Data viewer
 if(MPM_DUMP_VIEW)
     add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
 endif(MPM_DUMP_VIEW)

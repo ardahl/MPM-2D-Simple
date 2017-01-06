@@ -146,8 +146,8 @@ int main(int argc, char** argv) {
     glutCreateWindow("Animation");
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
-    glutIdleFunc(idle);
     glutKeyboardFunc(onKey);
+    glutIdleFunc(idle);
     
     ///initialize
     ///while not done

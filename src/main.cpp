@@ -41,10 +41,12 @@ int main(int argc, char** argv) {
         writeParticles(parOut.c_str(), world.particles);
 		frame++;
 		iters = 0;
+		timeSinceLastFrame = 0.0;
 	  }
 	  
 	  world.step();
 	  timeSinceLastFrame += world.dt;
+	  world.elapsedTime += world.dt;
 	  iters++;
 
 	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(30.0/world.dt));

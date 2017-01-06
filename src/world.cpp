@@ -48,27 +48,33 @@ World::World(std::string config) {
     auto objectsIn = root["objects"];
     for (auto i : range(objectsIn.size())) {
         objType = objectsIn[i].get("type", "square").asString();
-        auto locationIn = objectsIn[i]["location"];
-        if (locationIn.size() != 2) {
+		if (objType == "square" || objType == "circle") {
+		  auto locationIn = objectsIn[i]["location"];
+		  if (locationIn.size() != 2) {
             std::cout<< "bad object location, skipping" << std::endl;
             continue;
-        }
-        object(0) = locationIn[0].asDouble();
-        object(1) = locationIn[1].asDouble();
-        auto sizeIn = objectsIn[i]["size"];
-        if (locationIn.size() != 2) {
+		  }
+		  object(0) = locationIn[0].asDouble();
+		  object(1) = locationIn[1].asDouble();
+		  auto sizeIn = objectsIn[i]["size"];
+		  if (sizeIn.size() != 2) {
             std::cout<< "bad object size, skipping" << std::endl;
             continue;
-        }
-        size[0] = sizeIn[0].asDouble();
-        size[1] = sizeIn[1].asDouble();
-        auto resIn = objectsIn[i]["resolution"];
-        if (resIn.size() != 2) {
+		  }
+		  size[0] = sizeIn[0].asDouble();
+		  size[1] = sizeIn[1].asDouble();
+		  auto resIn = objectsIn[i]["resolution"];
+		  if (resIn.size() != 2) {
             std::cout<< "bad object resolution, skipping" << std::endl;
             continue;
-        }
-        ores[0] = resIn[0].asInt();
-        ores[1] = resIn[1].asInt();
+		  }
+		  ores[0] = resIn[0].asInt();
+		  ores[1] = resIn[1].asInt();
+		} else {
+		  std::vector<Particle> parts;
+		  readParticles(objectsIn[i].get("filename","input").asString().c_str(), parts);
+		  particles.insert(particles.end(), parts.begin(), parts.end());
+		}
     }
 
     auto gridIn = root["grid"]; 
@@ -659,8 +665,9 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 }
 
 
-void readParticles(const char *fname, std::vector<Particle> &particles) {
+bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	Partio::ParticlesDataMutable *data = Partio::read(fname);
+	if (data == 0) return 0;
 	Partio::ParticleAttribute xattr;
 	Partio::ParticleAttribute uattr;
 	Partio::ParticleAttribute sattr;
@@ -732,4 +739,5 @@ void readParticles(const char *fname, std::vector<Particle> &particles) {
 		p.vol = 1.0;
 	  }
 	}
+	return true;
 }
