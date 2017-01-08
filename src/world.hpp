@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include "defines.hpp"
 #include <vector>
+#include <algorithm>
 
 class Force;
 
@@ -68,5 +69,11 @@ public:
     void updateGradient(double dt);         //Update_Deformation_Gradient
     void gridToParticles(double dt);        //Update_Particle_Velocities and Update_Particle_Positions
 };
+
+inline double clamp(double x, double low, double high)
+{
+    return std::min(high, std::max(x, low));
+}
+
 
 #endif

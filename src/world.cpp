@@ -4,7 +4,6 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
-#include <algorithm>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -496,7 +495,7 @@ void World::updateGradient(double dt) {
         Matrix2d svdV = svd.matrixV();
         
         Vector2d sVClamped;
-        sVClamped << std::clamp(svdSV(0), 1-p.compression, 1+p.stretch), std::clamp(svdSV(1), 1-p.compression, 1+p.stretch);
+        sVClamped << clamp(svdSV(0), 1-p.compression, 1+p.stretch), clamp(svdSV(1), 1-p.compression, 1+p.stretch);
         Matrix2d svdClamped = sVClamped.asDiagonal();
         
         p.gradientE = svdU * svdClamped * svdV.transpose();
