@@ -20,8 +20,7 @@ int count = 0;
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
-//TODO: Replace ifdef with json parsing
-//TODO: Fix declaration to work with code
+//TODO: Print out info from parsing the json.
 
 World::World(std::string config) {
     stepNum = 0;
