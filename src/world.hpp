@@ -25,8 +25,8 @@ public:
     double vol;         //volume
     double compression; //critical compression (sec. 5 of stomahkin)
     double stretch; //critical stretch (sec. 5 of stomahkin)
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m, double c, double s): 
+	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0), compression(c), stretch(s) {}
     Particle() {}
 };
 
@@ -48,7 +48,7 @@ public:
     // external forces
     Eigen::Vector2d gravity;
     double rotation;
-    bool rotationEnabled, gravityEnabled;
+    bool rotationEnabled, gravityEnabled, plasticEnabled;
     Eigen::Vector2d center;
 
 

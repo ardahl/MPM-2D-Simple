@@ -15,11 +15,6 @@
 /// remove debug output.
 /// #define NDEBUG
 
-//Set up a guard to enable testing of solely elastic forces.
-/// Code dealing with plasticity should be put around a #ifndef ELASTIC_ONLY guard.
-/// Uncomment to disable plasticity code. (Plastic deformation gradient will be set to the identitiy.)
-/// #define ELASTIC_ONLY
-
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later
 /// in which case it will need to move. But for now it'll rest here.

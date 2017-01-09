@@ -20,6 +20,9 @@ int count = 0;
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
+//TODO: Replace ifdef with json parsing
+//TODO: Fix declaration to work with code
+
 World::World(std::string config) {
     stepNum = 0;
     elapsedTime = 0.0;
@@ -124,6 +127,20 @@ World::World(std::string config) {
         rotationEnabled = true;
         rotation = rotationIn.asDouble();
     }
+    
+    auto stretchIn = root["stretch"];
+    auto compressIn = root["compression"];
+    double parC;
+    double parS;
+    if (stretchIn.isNull() || compressIn.isNull()){
+        plasticEnabled = false;
+        parC = 0.0;
+        parS = 0.0;
+    } else {
+        plasticEnabled = true;
+        parC = compressIn[0].asDouble();
+        parS = stretchIn[0].asDouble();
+    }
   
     origin(0) += h/2.0; origin(1) += h/2.0;
     if(objType == "square") {
@@ -135,7 +152,7 @@ World::World(std::string config) {
             for(int j = 0; j < ores[1]; j++) {
                 Vector2d pos = object + Vector2d(diffx*i, diffy*j);
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-                Particle par(pos, Vector2d(0,0), col, pmass);
+                Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
                 particles.push_back(par);
             }
         }
@@ -163,7 +180,7 @@ World::World(std::string config) {
                     printf("ores: %d, %d\n", ores[0], ores[1]);
                 }
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-                    Particle par(pos, Vector2d(0,0), col, pmass);
+                    Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
                     particles.push_back(par);
                 }
             }
@@ -485,25 +502,25 @@ void World::updateGradient(double dt) {
         
         Matrix2d tempGradE = fp*p.gradientE;
         
-        #ifndef ELASTIC_ONLY
-        Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
-        
-        JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
-        
-        Matrix2d svdU = svd.matrixU();
-        Vector2d svdSV = svd.singularValues();
-        Matrix2d svdV = svd.matrixV();
-        
-        Vector2d sVClamped;
-        sVClamped << clamp(svdSV(0), 1-p.compression, 1+p.stretch), clamp(svdSV(1), 1-p.compression, 1+p.stretch);
-        Matrix2d svdClamped = sVClamped.asDiagonal();
-        
-        p.gradientE = svdU * svdClamped * svdV.transpose();
-        p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
-        #else 
-        p.gradientE = tempGradE;
-        p.gradientP = Matrix2d::Identity();
-        #endif
+        if (plasticEnabled){
+            Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
+            
+            JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
+            
+            Matrix2d svdU = svd.matrixU();
+            Vector2d svdSV = svd.singularValues();
+            Matrix2d svdV = svd.matrixV();
+            
+            Vector2d sVClamped;
+            sVClamped << clamp(svdSV(0), 1-p.compression, 1+p.stretch), clamp(svdSV(1), 1-p.compression, 1+p.stretch);
+            Matrix2d svdClamped = sVClamped.asDiagonal();
+            
+            p.gradientE = svdU * svdClamped * svdV.transpose();
+            p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
+        } else {
+            p.gradientE = tempGradE;
+            p.gradientP = Matrix2d::Identity();
+        }
     }
 }
 
