@@ -133,12 +133,15 @@ World::World(std::string config) {
     double parS;
     if (stretchIn.isNull() || compressIn.isNull()){
         plasticEnabled = false;
+        std::cout << "no plasticity" << std::endl;
         parC = 0.0;
         parS = 0.0;
     } else {
         plasticEnabled = true;
-        parC = compressIn[0].asDouble();
-        parS = stretchIn[0].asDouble();
+        parC = compressIn.asDouble();
+        parS = stretchIn.asDouble();
+        std::cout << "Compression: " << parC << std::endl;
+        std::cout << "Stretch: " << parS << std::endl;
     }
   
     origin(0) += h/2.0; origin(1) += h/2.0;
