@@ -148,11 +148,20 @@ void idle() {
 }
 
 int main(int argc, char** argv) {
-    if(argc < 3) {
-        std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
+    if(argc < 2) {
+        std::cout << "Usage: ./mpm <configfile> [debug and video outputs name]\n";
         std::exit(0);
     }
-    std::string outfile = std::string(argv[2]);
+	std::string outfile;
+	if (argc < 3) {
+	  std::string inputfname = std::string(argv[1]);
+	  auto const start = inputfname.find_last_of('/');
+	  auto const end = inputfname.find_last_of('.');
+	  outfile = inputfname.substr(start+1,end-start-1);
+	} else {
+	  outfile = std::string(argv[2]);
+	}
+
     #ifndef NDEBUG
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());

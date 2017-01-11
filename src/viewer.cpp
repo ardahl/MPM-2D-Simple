@@ -32,14 +32,13 @@ void reshape(int w, int h) {
     glViewport(0, 0, width, height);
 }
 
-bool readAnimation(char *fname, std::vector<std::vector<Particle> > &frames) {
+bool readAnimation(const char *fname, std::vector<std::vector<Particle> > &frames) {
 	for (int frame = 0; true; frame++) {
    	    std::vector<Particle> parts;
    	    std::ostringstream ss;
 		ss << std::setw(5) << std::setfill('0') << frame;
 		std::string pframe(ss.str());
 		std::string parIn = std::string(fname) + "." + pframe + ".bgeo";
-		std::cout<<frames.size()<<std::endl;
 		if (!readParticles(parIn.c_str(), parts)) break;
 		if (parts.size() == 0) break;
 		frames.push_back(parts);
@@ -76,7 +75,6 @@ void display() {
             Vector2d x = x0 + gridPos*world->h;
             x = x - x0;
             glVertex2f(x(0)/x10(0), x(1)/x10(1));
-			//std::cout<<x(0)/x10(0)<<" "<<x(1)/x10(1)<<std::endl;
         }
     }
     glEnd();
@@ -146,7 +144,17 @@ int main(int argc, char *argv[]) {
     glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
     //set length of one complete row in destination data (doesn't need to equal img.cols)
     glPixelStorei(GL_PACK_ROW_LENGTH, img.step/img.elemSize());
-	std::string outfile(argv[2]);
+
+	std::string outfile;
+	if (argc < 3) {
+	  std::string inputfname = std::string(argv[1]);
+	  auto const start = inputfname.find_last_of('/');
+	  auto const end = inputfname.find_last_of('.');
+	  outfile = inputfname.substr(start+1,end-start-1);
+	} else {
+	  outfile = std::string(argv[2]);
+	}
+
     std::string videoout = outfile + std::string(".avi");
     output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(width, height));
     
@@ -154,7 +162,7 @@ int main(int argc, char *argv[]) {
     world = new World(config);
     world->init();
     
-    readAnimation(argv[2], frames);
+    readAnimation(outfile.c_str(), frames);
 
     glutMainLoop();
   

@@ -73,7 +73,11 @@ World::World(std::string config) {
 		  ores[1] = resIn[1].asInt();
 		} else {
 		  std::vector<Particle> parts;
-		  readParticles(objectsIn[i].get("filename","input").asString().c_str(), parts);
+		  auto const pos = config.find_last_of('/');
+		  std::string partfilename = config.substr(0, pos+1);
+		  partfilename = partfilename + objectsIn[i].get("filename", "input.bgeo").asString();
+		  std::cout<<partfilename<<std::endl;
+		  readParticles(partfilename.c_str(), parts);
 		  particles.insert(particles.end(), parts.begin(), parts.end());
 		}
     }
