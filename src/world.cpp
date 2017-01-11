@@ -4,6 +4,8 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <Partio.h>
+#include <Eigen/Geometry>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -43,50 +45,61 @@ World::World(std::string config) {
     std::string str, objType = "square";
     int ores[2] = {1, 1};
 
+	dt = root.get("dt", 1.0/30.0).asDouble();
+	totalTime = root.get("totalTime", 5.0).asDouble();
+
     auto objectsIn = root["objects"];
     for (auto i : range(objectsIn.size())) {
         objType = objectsIn[i].get("type", "square").asString();
-        auto locationIn = objectsIn[i]["location"];
-        if (locationIn.size() != 2) {
+		if (objType == "square" || objType == "circle") {
+		  auto locationIn = objectsIn[i]["location"];
+		  if (locationIn.size() != 2) {
             std::cout<< "bad object location, skipping" << std::endl;
             continue;
-        }
-        object(0) = locationIn[0].asDouble();
-        object(1) = locationIn[1].asDouble();
-        auto sizeIn = objectsIn[i]["size"];
-        if (locationIn.size() != 2) {
+		  }
+		  object(0) = locationIn[0].asDouble();
+		  object(1) = locationIn[1].asDouble();
+		  auto sizeIn = objectsIn[i]["size"];
+		  if (sizeIn.size() != 2) {
             std::cout<< "bad object size, skipping" << std::endl;
             continue;
-        }
-        size[0] = sizeIn[0].asDouble();
-        size[1] = sizeIn[1].asDouble();
-        auto resIn = objectsIn[i]["resolution"];
-        if (resIn.size() != 2) {
+		  }
+		  size[0] = sizeIn[0].asDouble();
+		  size[1] = sizeIn[1].asDouble();
+		  auto resIn = objectsIn[i]["resolution"];
+		  if (resIn.size() != 2) {
             std::cout<< "bad object resolution, skipping" << std::endl;
             continue;
-        }
-        ores[0] = resIn[0].asInt();
-        ores[1] = resIn[1].asInt();
+		  }
+		  ores[0] = resIn[0].asInt();
+		  ores[1] = resIn[1].asInt();
+		} else {
+		  std::vector<Particle> parts;
+		  readParticles(objectsIn[i].get("filename","input").asString().c_str(), parts);
+		  particles.insert(particles.end(), parts.begin(), parts.end());
+		}
     }
 
     auto gridIn = root["grid"]; 
     {
+ 	    h = gridIn.get("h", 1.0).asDouble();
         auto originIn = gridIn["origin"];
         if (originIn.size() != 2) {
-            std::cout<< "bad grid origin, skipping" << std::endl;
+		  origin = Vector2d(0.0,0.0);
         } 
         else {
             origin = Vector2d(originIn[0].asDouble(),originIn[1].asDouble());
         }
+		origin(0) += h/2.0; origin(1) += h/2.0;
         auto sizeIn = gridIn["size"];
         if (sizeIn.size() != 2) {
-            std::cout<< "bad grid size, skipping" << std::endl;
+            std::cout<< "bad grid size, exiting" << std::endl;
+			exit(-1);
         } 
         else {
             res[0] = sizeIn[0].asInt();
             res[1] = sizeIn[1].asInt();
         }
-        h = gridIn["h"].asDouble();
     }
   
     double pmass = root["mass"].asDouble();
@@ -145,6 +158,11 @@ World::World(std::string config) {
     }
   
     origin(0) += h/2.0; origin(1) += h/2.0;
+    #ifndef NDEBUG
+    m = 0;
+    #endif
+    
+>>>>>>> src/world.cpp
     if(objType == "square") {
         center = object + (Vector2d(size[0],size[1]) * 0.5);
         //Set up particles at each object vertex
@@ -156,6 +174,9 @@ World::World(std::string config) {
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
                 particles.push_back(par);
+                #ifndef NDEBUG
+                m += pmass;
+                #endif
             }
         }
     }
@@ -174,16 +195,13 @@ World::World(std::string config) {
                 Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Vector2d ph = pos - object;
-                if(i == ores[0]/2 && j == ores[1]/2) {
-                    printf("Pos: %f, %f\n", pos(0), pos(1));
-                    printf("ph: %f, %f\n", ph(0), ph(1));
-                    printf("diff: %f, %f\n", diffx, diffy);
-                    printf("size: %f, %f\n", size[0], size[1]);
-                    printf("ores: %d, %d\n", ores[0], ores[1]);
-                }
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
                     Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
+                    //Particle par(pos, pos, col, pmass);
                     particles.push_back(par);
+                    #ifndef NDEBUG
+                    m += pmass;
+                    #endif
                 }
             }
         }
@@ -205,11 +223,17 @@ World::World(std::string config) {
     printf("Rotation: %f\n", rotation);
     printf("X0: (%f, %f)\n", origin(0), origin(1));
     printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
+
+	// allocate grid values
     mass = new double[res[0]*res[1]];
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
     //TODO: Check gradient
+    
+    #ifndef NDEBUG
+    angle = 0;
+    #endif
 }
 
 void World::init() {
@@ -307,13 +331,14 @@ void World::particleVolumesDensities() {
  *      Update_Particle_Velocities
  *      Update_Particle_Positions
  ******************************/
-void World::step(double dt) {
+void World::step() {
     particlesToGrid();
     computeGridForces();
-    updateGridVelocities(dt);
-    updateGradient(dt);
-    gridToParticles(dt);
+    updateGridVelocities();
+    updateGradient();
+    gridToParticles();
     stepNum++;
+	elapsedTime += dt;
 }
 
 /******************************
@@ -352,8 +377,10 @@ void World::particlesToGrid() {
         }
 	}
     /// #pragma omp parallel for collapse(2)
+	double tmass = 0.0;
 	for(int i = 0; i < res[0]; i++) {
 		for(int j = 0; j < res[1]; j++) {
+		  tmass += mass[i*res[1]+j];
             if(mass[i*res[1] + j] < EPS) {
                 vel[i*res[1] + j] = Vector2d(0.0, 0.0);
             }
@@ -401,7 +428,7 @@ void World::computeGridForces() {
 		bounds(offset, res, xbounds, ybounds);
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-i,offset(1)-j),h);
+                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-j,offset(1)-k),h);
                 frc[j*res[1] + k] -= accumF;
                 #ifndef NDEBUG
                 if(frc[j*res[1] + k].hasNaN()) {
@@ -410,7 +437,7 @@ void World::computeGridForces() {
                     std::cout << "Volume: " << p.vol << std::endl;
                     std::cout << "Determinant: " << gradient.determinant() << std::endl;
                     std::cout << "Stress:\n" << p.stress << std::endl;
-                    std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-i, offset(1)-j),h) << std::endl;
+                    std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-j, offset(1)-k),h) << std::endl;
                     exit(0);
                 }
                 #endif
@@ -425,7 +452,7 @@ void World::computeGridForces() {
  *          v^*_i = v_i^n + (dt * f_i)/m_i + dt * g
  *      end for
  *****************************/
-void World::updateGridVelocities(double dt) {
+void World::updateGridVelocities() {
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
@@ -440,7 +467,7 @@ void World::updateGridVelocities(double dt) {
 				}
 				if(rotationEnabled) {
                     Vector2d d = origin+Vector2d(h*i,h*j)-center;
-                    extfrc += rotation*Vector2d(-d(1), d(0));
+                    extfrc += mass[index]*rotation*Vector2d(-d(1), d(0));
 				}
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
             }
@@ -466,7 +493,7 @@ void World::updateGridVelocities(double dt) {
  *          F_p,n+1 *= f_p,n+1
  *      end for
  *****************************/
-void World::updateGradient(double dt) {
+void World::updateGradient() {
     /// #pragma omp parallel for 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
@@ -483,13 +510,13 @@ void World::updateGradient(double dt) {
                     std::cout << velStar[index] << std::endl;
                     exit(0);
                 }
-                if(gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose().hasNaN()) {
+                if(gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose().hasNaN()) {
                     printf("gradV gradW has NaN at (%d, %d)\n", j, k);
-                    std::cout << gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose() << std::endl;
+                    std::cout << gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose() << std::endl;
                     exit(0);
                 }
                 #endif
-                Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-i,offset(1)-j),h).transpose();
+                Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose();
                 gradV += accumGrad;
             }
         }
@@ -524,6 +551,16 @@ void World::updateGradient(double dt) {
             p.gradientP = Matrix2d::Identity();
         }
     }
+    #ifndef NDEBUG
+    double diffNorm = 0;
+    angle += rotation*dt*(M_PI/2.0)/m;
+    Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
+    for(unsigned int i = 0; i < particles.size(); i++) {
+        Matrix2d diff = particles[i].gradient - rotM;
+        diffNorm += diff.norm();
+    }
+    debug << elapsedTime << " " << diffNorm;
+    #endif
 }
 
 /******************************
@@ -543,9 +580,17 @@ void World::updateGradient(double dt) {
  *          x_p += dt * v_p
  *      end for
  *****************************/
-void World::gridToParticles(double dt) {
+void World::gridToParticles() {
     double alpha = 0.95;
     /// #pragma omp parallel for
+	Vector2d com(0.0,0.0);
+    for(size_t i = 0; i < particles.size(); i++) {
+	  com += particles[i].x;
+	}
+	com /= particles.size();
+    #ifndef NDEBUG
+    double normDiff = 0;
+    #endif
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
@@ -593,6 +638,13 @@ void World::gridToParticles(double dt) {
         //Update Positions
         p.x += dt * p.v;
         #ifndef NDEBUG
+        p.x1 = p.gradient * p.x0;
+        Vector2d diff = p.x - p.x1;
+        normDiff += diff.norm();
+        /// p.x = p.x1;
+        #endif
+        
+        #ifndef NDEBUG
         if(p.x.hasNaN()) {
             printf("Pos has NaN\n");
             std::cout << p.x << std::endl;
@@ -623,6 +675,141 @@ void World::gridToParticles(double dt) {
             p.v(1) *= -1;
         }
     }
+    #ifndef NDEBUG
+    debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
+    #endif
 }
 
 
+void writeParticles(const char *fname, const std::vector<Particle> &particles) {
+	Partio::ParticlesDataMutable *data = Partio::create();
+	Partio::ParticleAttribute xattr;
+	Partio::ParticleAttribute uattr;
+	Partio::ParticleAttribute sattr;
+	Partio::ParticleAttribute gattr;
+	Partio::ParticleAttribute cattr;
+	Partio::ParticleAttribute mattr;
+	Partio::ParticleAttribute rattr;
+	Partio::ParticleAttribute vattr;
+	data->addParticles(particles.size());
+
+	data->addAttribute("position", Partio::VECTOR, 2);
+	data->addAttribute("velocity", Partio::VECTOR, 2);
+	data->addAttribute("stress", Partio::VECTOR, 4);
+	data->addAttribute("gradient", Partio::VECTOR, 4);
+	data->addAttribute("color", Partio::VECTOR, 3);
+	data->addAttribute("mass", Partio::FLOAT, 1);
+	data->addAttribute("rho", Partio::FLOAT, 1);
+	data->addAttribute("vol", Partio::FLOAT, 1);
+	
+	data->attributeInfo("position", xattr);
+	data->attributeInfo("velocity", uattr);
+	data->attributeInfo("stress", sattr);
+	data->attributeInfo("gradient", gattr);
+	data->attributeInfo("color", cattr);
+	data->attributeInfo("mass", mattr);
+	data->attributeInfo("rho", rattr);
+	data->attributeInfo("vol", vattr);
+
+	for (unsigned int i=0; i < particles.size(); i++) {
+		const Particle &p = particles[i];
+		float *x = data->dataWrite<float>(xattr, i);
+		float *u = data->dataWrite<float>(uattr, i);
+		float *s = data->dataWrite<float>(sattr, i);
+		float *g = data->dataWrite<float>(gattr, i);
+		float *c = data->dataWrite<float>(cattr, i);
+		float *m = data->dataWrite<float>(mattr, i);
+		float *r = data->dataWrite<float>(rattr, i);
+		float *v = data->dataWrite<float>(vattr, i);
+
+		x[0] = p.x(0), x[1] = p.x(1);
+        u[0] = p.v(0), u[1] = p.v(1);
+		s[0] = p.stress(0,0), s[1] = p.stress(0,1), s[2] = p.stress(1,0), s[3] = p.stress(1,1);
+		g[0] = p.gradient(0,0), g[1] = p.gradient(0,1), g[2] = p.gradient(1,0), g[3] = p.gradient(1,1);
+		c[0] = p.color(0), c[1] = p.color(1), s[2] = p.color(2);
+		m[0] = p.m;
+		r[0] = p.rho;
+		v[0] = p.vol;
+	}
+
+	Partio::write(fname, *data);
+	data->release();
+}
+
+
+bool readParticles(const char *fname, std::vector<Particle> &particles) {
+	Partio::ParticlesDataMutable *data = Partio::read(fname);
+	if (data == 0) return 0;
+	Partio::ParticleAttribute xattr;
+	Partio::ParticleAttribute uattr;
+	Partio::ParticleAttribute sattr;
+	Partio::ParticleAttribute gattr;
+	Partio::ParticleAttribute cattr;
+	Partio::ParticleAttribute mattr;
+	Partio::ParticleAttribute rattr;
+	Partio::ParticleAttribute vattr;
+
+	bool position = data->attributeInfo("position", xattr);
+	bool velocity = data->attributeInfo("velocity", uattr);
+	bool stress = data->attributeInfo("stress", sattr);
+	bool gradient = data->attributeInfo("gradient", gattr);
+	bool color = data->attributeInfo("color", cattr);
+	bool mass = data->attributeInfo("mass", mattr);
+	bool rho = data->attributeInfo("rho", rattr);
+	bool vol = data->attributeInfo("vol", vattr);
+
+	particles.resize(data->numParticles());
+
+	for (unsigned int i=0; i < particles.size(); i++) {
+	  Particle &p = particles[i];
+	  if (position) {
+		float *x = data->dataWrite<float>(xattr, i);
+		p.x[0] = x[0], p.x[1] = x[1];
+	  } else {
+		p.x = Vector2d(0.0, 0.0);
+	  }
+	  if (velocity) {
+		float *u = data->dataWrite<float>(uattr, i);
+		p.v[0] = u[0], p.v[1] = u[1];
+	  } else {
+		p.v = Vector2d(0.0, 0.0);
+		}
+	  if (stress) {
+		float *s = data->dataWrite<float>(sattr, i);
+		p.stress(0,0) = s[0], p.stress(0,1) = s[1], p.stress(1,0) = s[2], p.stress(1,1) = s[3];
+	  } else {
+		p.stress = Matrix2d::Zero();
+	  }
+	  if (gradient) {
+		float *g = data->dataWrite<float>(gattr, i);
+		p.gradient(0,0) = g[0], p.gradient(0,1) = g[1], p.gradient(1,0) = g[2], p.gradient(1,1) = g[3];
+	  } else {
+		p.gradient = Matrix2d::Identity();
+	  }
+	  if (color) {
+		float *c = data->dataWrite<float>(cattr, i);
+		p.color(0) = c[0], p.color(1) = c[1], p.color(2) = c[2];
+	  } else {
+		p.color = Vector3d(1.0,1.0,1.0);
+	  }
+	  if (mass) {
+		float *m = data->dataWrite<float>(mattr, i);
+		p.m = m[0];
+	  } else {
+		p.m = 1.0;
+	  }
+	  if (rho) {
+		float *r = data->dataWrite<float>(rattr, i);
+			p.rho = r[0];
+	  } else {
+		p.rho = 1.0;
+	  }
+	  if (vol) {
+		float *v = data->dataWrite<float>(vattr, i);
+		p.vol = v[0];
+	  } else {
+		p.vol = 1.0;
+	  }
+	}
+	return true;
+}

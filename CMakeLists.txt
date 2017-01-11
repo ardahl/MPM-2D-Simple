@@ -28,7 +28,7 @@ MARK_AS_ADVANCED(
 # User Options
 ###
 # Options are Release, Debug, and Optdebug
-set( CMAKE_BUILD_TYPE Release )
+set( CMAKE_BUILD_TYPE Optdebug )
 #Source directory
 set( SRC "src")
 #mpm
@@ -120,5 +120,5 @@ endif(MPM_SIM)
 #Data viewer
 if(MPM_DUMP_VIEW)
     add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
 endif(MPM_DUMP_VIEW)

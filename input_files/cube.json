@@ -1,4 +1,6 @@
 {
+	"dt" : 0.000033333333,
+	"totalTime" : 5,
 	"objects" : [
 		{
 			"location" : [0.0, 1.5],
@@ -16,5 +18,5 @@
 	"color" : [1.0, 0.0, 0.0],
 	"lame" : [1.0e6, 1.0e6],
 	"gravity" : [0.0, 0.0],
-	"rotate" : 10
+	"rotate" : 5
 }
