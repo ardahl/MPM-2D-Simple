@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include "defines.hpp"
 #include <vector>
+#include "profiler.hpp"
 
 class Force;
 
@@ -60,6 +61,7 @@ public:
     #endif
 
     World(std::string config);
+  ~World();
      //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
     std::vector<Particle> getParticles() { return particles; }
@@ -71,6 +73,8 @@ public:
     void updateGridVelocities();            //Update_Grid_Velocities
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
+
+  benlib::Profiler prof;
 };
 
 void writeParticles(const char *fname, const std::vector<Particle> &particles);

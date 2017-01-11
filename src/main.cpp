@@ -50,6 +50,7 @@ int main(int argc, char** argv) {
 		frame++;
 		iters = 0;
 		timeSinceLastFrame = 0.0;
+		printf("\n");
 	  }
 	  
 	  world.step();
@@ -57,7 +58,8 @@ int main(int argc, char** argv) {
 	  world.elapsedTime += world.dt;
 	  iters++;
 
-	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(30.0/world.dt));
+	  //std::cout<<world.dt<<std::endl;
+	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(1.0/(30.0*world.dt)));
 	  std::cout<<std::flush;
 	}
 
