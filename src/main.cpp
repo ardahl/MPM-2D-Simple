@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
 	  printf("Frame: %d/%d\tStep: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(1.0/(30.0*world.dt)));
 	  std::cout<<std::flush;
 	}
-	std::cout<<std::endl<<world.elapsedTime<<" "<<frame<<std::endl;
+	std::cout<<std::endl<<std::endl;
 
     return 0;
 }
