@@ -11,11 +11,11 @@ SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -pedantic -O3" CACHE STRING
     "Flags used by the C compiler during optimized debugging builds."
     FORCE )
 SET( CMAKE_EXE_LINKER_FLAGS_OPTDEBUG
-    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "-Wl" CACHE STRING
     "Flags used for linking binaries during maintainer builds."
     FORCE )
 SET( CMAKE_SHARED_LINKER_FLAGS_OPTDEBUG
-    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "-Wl" CACHE STRING
     "Flags used by the shared libraries linker during maintainer builds."
     FORCE )
 MARK_AS_ADVANCED(
@@ -37,9 +37,11 @@ option(MPM_GRAPHICS "Compile the frame-grabbing mpm viewer" ON)
 option(MPM_SIM "Compile the simulation that just dumps data to file for later viewing" ON)
 #Haven't written these parts yet
 #mpm_sim viewer
-option(MPM_DUMP_VIEW "Compile the OpenGL viewer for the data files" ON)
+option(MPM_VIEW "Compile the OpenGL viewer for the data files" ON)
 #mpm_sim viewer use opencv
-option(MPM_DUMP_VIEW_CV "Viewer compiles with OpenCV to save frames to video" ON)
+option(MPM_VIEW_CV "Viewer compiles with OpenCV to save frames to video" ON)
+#sampler
+option(SAMPLER "Simple template code for creating input particle files" ON)
 
 ###
 # build details
@@ -112,13 +114,22 @@ if(MPM_GRAPHICS)
     add_executable(mpm_graphics ${SOURCES} ${SRC}/main_graphics.cpp)
     target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
 endif(MPM_GRAPHICS)
-#Data Dumper
+
+#Standalone sim
 if(MPM_SIM)
     add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
     target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB})
 endif(MPM_SIM)
+
 #Data viewer
-if(MPM_DUMP_VIEW)
+if(MPM_VIEW)
     add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
     target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
-endif(MPM_DUMP_VIEW)
+endif(MPM_VIEW)
+
+#Simple Sampling Tool
+if(SAMPLER)
+    add_executable(sampler ${SOURCES} ${SRC}/sampler.cpp)
+    target_link_libraries(sampler ${PARTIO_LIBRARY} ${ZLIB})
+endif(SAMPLER)
+
