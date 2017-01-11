@@ -49,19 +49,18 @@ int main(int argc, char** argv) {
         writeParticles(parOut.c_str(), world.particles);
 		frame++;
 		iters = 0;
-		timeSinceLastFrame = 0.0;
+		timeSinceLastFrame = world.dt;
 		printf("\n");
 	  }
 	  
 	  world.step();
 	  timeSinceLastFrame += world.dt;
-	  world.elapsedTime += world.dt;
 	  iters++;
 
-	  //std::cout<<world.dt<<std::endl;
-	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(1.0/(30.0*world.dt)));
+	  printf("Frame: %d/%d\tStep: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(1.0/(30.0*world.dt)));
 	  std::cout<<std::flush;
 	}
+	std::cout<<std::endl<<world.elapsedTime<<" "<<frame<<std::endl;
 
     return 0;
 }
