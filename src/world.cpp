@@ -75,7 +75,11 @@ World::World(std::string config) {
 		  ores[1] = resIn[1].asInt();
 		} else {
 		  std::vector<Particle> parts;
-		  readParticles(objectsIn[i].get("filename","input").asString().c_str(), parts);
+		  auto const pos = config.find_last_of('/');
+		  std::string partfilename = config.substr(0, pos+1);
+		  partfilename = partfilename + objectsIn[i].get("filename", "input.bgeo").asString();
+		  std::cout<<partfilename<<std::endl;
+		  readParticles(partfilename.c_str(), parts);
 		  particles.insert(particles.end(), parts.begin(), parts.end());
 		}
     }
@@ -359,6 +363,7 @@ void World::step() {
  *
  *****************************/
 void World::particlesToGrid() {
+  auto timer = prof.timeName("particlesToGrid");
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
 
@@ -413,6 +418,7 @@ void World::particlesToGrid() {
  *      end for
  *****************************/
 void World::computeGridForces() {
+  auto timer = prof.timeName("computeGridForces");
     {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
 
     for(size_t i = 0; i < particles.size(); i++) {
@@ -453,6 +459,7 @@ void World::computeGridForces() {
  *      end for
  *****************************/
 void World::updateGridVelocities() {
+  auto timer = prof.timeName("updateGridVelocities");
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
@@ -494,6 +501,7 @@ void World::updateGridVelocities() {
  *      end for
  *****************************/
 void World::updateGradient() {
+  auto timer = prof.timeName("updateGradient");
     /// #pragma omp parallel for 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
@@ -581,6 +589,7 @@ void World::updateGradient() {
  *      end for
  *****************************/
 void World::gridToParticles() {
+  auto timer = prof.timeName("gridToParticles");
     double alpha = 0.95;
     /// #pragma omp parallel for
 	Vector2d com(0.0,0.0);
@@ -813,3 +822,11 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	}
 	return true;
 }
+
+World::~World() {
+  delete [] mass;
+  delete [] vel;
+  delete [] velStar;
+  delete [] frc;
+  prof.dump<std::chrono::duration<double>>(std::cout);
+} 

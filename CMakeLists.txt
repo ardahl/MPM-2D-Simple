@@ -4,18 +4,18 @@ project(MPM)
 ###
 # Add build type that uses O3 but includes debugging flag
 ###
-SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -O3" CACHE STRING
+SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -O3" CACHE STRING
     "Flags used by the C++ compiler during optimized debugging builds."
     FORCE )
-SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -pedantic -O3" CACHE STRING
+SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -pedantic -O3" CACHE STRING
     "Flags used by the C compiler during optimized debugging builds."
     FORCE )
 SET( CMAKE_EXE_LINKER_FLAGS_OPTDEBUG
-    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "-Wl" CACHE STRING
     "Flags used for linking binaries during maintainer builds."
     FORCE )
 SET( CMAKE_SHARED_LINKER_FLAGS_OPTDEBUG
-    "-Wl,--warn-unresolved-symbols,--warn-once" CACHE STRING
+    "-Wl" CACHE STRING
     "Flags used by the shared libraries linker during maintainer builds."
     FORCE )
 MARK_AS_ADVANCED(
@@ -37,9 +37,11 @@ option(MPM_GRAPHICS "Compile the frame-grabbing mpm viewer" ON)
 option(MPM_SIM "Compile the simulation that just dumps data to file for later viewing" ON)
 #Haven't written these parts yet
 #mpm_sim viewer
-option(MPM_DUMP_VIEW "Compile the OpenGL viewer for the data files" ON)
+option(MPM_VIEW "Compile the OpenGL viewer for the data files" ON)
 #mpm_sim viewer use opencv
-option(MPM_DUMP_VIEW_CV "Viewer compiles with OpenCV to save frames to video" ON)
+option(MPM_VIEW_CV "Viewer compiles with OpenCV to save frames to video" ON)
+#sampler
+option(SAMPLER "Simple template code for creating input particle files" ON)
 
 ###
 # build details
@@ -108,17 +110,28 @@ set (SOURCES
 )
 
 #Simulation and Viewer
+add_library(mpmlib ${SOURCES})
+
 if(MPM_GRAPHICS)
-    add_executable(mpm_graphics ${SOURCES} ${SRC}/main_graphics.cpp)
-    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
+    add_executable(mpm_graphics ${SRC}/main_graphics.cpp)
+    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
 endif(MPM_GRAPHICS)
-#Data Dumper
+
+#Standalone sim
 if(MPM_SIM)
-    add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
-    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB})
+    add_executable(mpm ${SRC}/main.cpp)
+    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
 endif(MPM_SIM)
+
 #Data viewer
-if(MPM_DUMP_VIEW)
-    add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
-endif(MPM_DUMP_VIEW)
+if(MPM_VIEW)
+    add_executable(viewer ${SRC}/viewer.cpp)
+    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
+endif(MPM_VIEW)
+
+#Simple Sampling Tool
+if(SAMPLER)
+    add_executable(sampler ${SRC}/sampler.cpp)
+    target_link_libraries(sampler ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
+endif(SAMPLER)
+

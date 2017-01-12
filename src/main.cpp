@@ -18,11 +18,19 @@ int main(int argc, char** argv) {
 	int frame = 0;
 	int iters = 0;
 
-    if(argc < 3) {
-        std::cout << "Usage: ./mpm <configfile> <debug and video outputs name>\n";
+    if(argc < 2) {
+        std::cout << "Usage: ./mpm <configfile> [debug and video outputs name]\n";
         std::exit(0);
     }
-    std::string outfile = std::string(argv[2]);
+	std::string outfile;
+	if (argc < 3) {
+	  std::string inputfname = std::string(argv[1]);
+	  auto const start = inputfname.find_last_of('/');
+	  auto const end = inputfname.find_last_of('.');
+	  outfile = inputfname.substr(start+1,end-start-1);
+	} else {
+	  outfile = std::string(argv[2]);
+	}
 #ifndef NDEBUG
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());
@@ -41,17 +49,18 @@ int main(int argc, char** argv) {
         writeParticles(parOut.c_str(), world.particles);
 		frame++;
 		iters = 0;
-		timeSinceLastFrame = 0.0;
+		timeSinceLastFrame = world.dt;
+		printf("\n");
 	  }
 	  
 	  world.step();
 	  timeSinceLastFrame += world.dt;
-	  world.elapsedTime += world.dt;
 	  iters++;
 
-	  printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(30.0/world.dt));
+	  printf("Frame: %d/%d\tStep: %d/%d\r", frame, (int)(30.0*world.totalTime), iters, (int)(1.0/(30.0*world.dt)));
 	  std::cout<<std::flush;
 	}
+	std::cout<<std::endl<<std::endl;
 
     return 0;
 }
