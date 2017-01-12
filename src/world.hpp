@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include "defines.hpp"
 #include <vector>
+#include <algorithm>
 #include "profiler.hpp"
 
 class Force;
@@ -20,11 +21,14 @@ public:
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
     double m;                  //mass
-    Eigen::Matrix2d gradient;  //deformation gradient
+    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
+    Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     double rho;         //density
     double vol;         //volume
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  x(x), v(v), color(color), m(m), gradient(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m, double c, double s): 
+	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0), compression(c), stretch(s) {
           #ifndef NDEBUG
           x0 = x;
           #endif
@@ -50,7 +54,7 @@ public:
     // external forces
     Eigen::Vector2d gravity;
     double rotation;
-    bool rotationEnabled, gravityEnabled;
+    bool rotationEnabled, gravityEnabled, plasticEnabled;
     Eigen::Vector2d center;
 
     //Debugging stuff
@@ -76,6 +80,11 @@ public:
 
   benlib::Profiler prof;
 };
+
+inline double clamp(double x, double low, double high)
+{
+    return std::min(high, std::max(x, low));
+}
 
 void writeParticles(const char *fname, const std::vector<Particle> &particles);
 bool readParticles(const char *fname, std::vector<Particle> &particles);

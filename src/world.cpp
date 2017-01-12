@@ -22,6 +22,8 @@ int count = 0;
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
+//TODO: Print out info from parsing the json.
+
 World::World(std::string config) {
     stepNum = 0;
     elapsedTime = 0.0;
@@ -141,9 +143,30 @@ World::World(std::string config) {
         rotationEnabled = true;
         rotation = rotationIn.asDouble();
     }
+    
+    auto stretchIn = root["stretch"];
+    auto compressIn = root["compression"];
+    double parC;
+    double parS;
+    if (stretchIn.isNull() || compressIn.isNull()){
+        plasticEnabled = false;
+        std::cout << "no plasticity" << std::endl;
+        parC = 0.0;
+        parS = 0.0;
+    } else {
+        plasticEnabled = true;
+        parC = compressIn.asDouble();
+        parS = stretchIn.asDouble();
+        std::cout << "Compression: " << parC << std::endl;
+        std::cout << "Stretch: " << parS << std::endl;
+    }
+  
+    origin(0) += h/2.0; origin(1) += h/2.0;
     #ifndef NDEBUG
     m = 0;
     #endif
+    
+>>>>>>> src/world.cpp
     if(objType == "square") {
         center = object + (Vector2d(size[0],size[1]) * 0.5);
         //Set up particles at each object vertex
@@ -153,7 +176,7 @@ World::World(std::string config) {
             for(int j = 0; j < ores[1]; j++) {
                 Vector2d pos = object + Vector2d(diffx*i, diffy*j);
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-                Particle par(pos, Vector2d(0,0), col, pmass);
+                Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
                 particles.push_back(par);
                 #ifndef NDEBUG
                 m += pmass;
@@ -177,7 +200,7 @@ World::World(std::string config) {
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Vector2d ph = pos - object;
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-				    Particle par(pos, Vector2d(0,0), col, pmass);
+                    Particle par(pos, Vector2d(0,0), col, pmass, parC, parS);
                     //Particle par(pos, pos, col, pmass);
                     particles.push_back(par);
                     #ifndef NDEBUG
@@ -400,8 +423,9 @@ void World::computeGridForces() {
 
     for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
-        double J = p.gradient.determinant();
-        Matrix2d eps = 0.5 * (p.gradient.transpose() * p.gradient - Matrix2d::Identity());
+        Matrix2d gradient = p.gradientE*p.gradientP; 
+        double J = gradient.determinant();
+        Matrix2d eps = 0.5 * (gradient.transpose() * gradient - Matrix2d::Identity());
         double trace = eps.trace();
         Matrix2d stress = lambda*trace*Matrix2d::Identity() + 2.0*mu*eps;
 
@@ -417,7 +441,7 @@ void World::computeGridForces() {
                     printf("\nf NaN at (%d, %d)\n", j, k);
                     std::cout << "Force:\n" << frc[j*res[1] + k] << std::endl;
                     std::cout << "Volume: " << p.vol << std::endl;
-                    std::cout << "Determinant: " << p.gradient.determinant() << std::endl;
+                    std::cout << "Determinant: " << gradient.determinant() << std::endl;
                     std::cout << "Stress:\n" << p.stress << std::endl;
                     std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-j, offset(1)-k),h) << std::endl;
                     exit(0);
@@ -512,7 +536,28 @@ void World::updateGradient() {
         }
         #endif
         Matrix2d fp = Matrix2d::Identity() + dt*gradV;
-        p.gradient = fp*p.gradient;
+        
+        Matrix2d tempGradE = fp*p.gradientE;
+        
+        if (plasticEnabled){
+            Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
+            
+            JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
+            
+            Matrix2d svdU = svd.matrixU();
+            Vector2d svdSV = svd.singularValues();
+            Matrix2d svdV = svd.matrixV();
+            
+            Vector2d sVClamped;
+            sVClamped << clamp(svdSV(0), 1-p.compression, 1+p.stretch), clamp(svdSV(1), 1-p.compression, 1+p.stretch);
+            Matrix2d svdClamped = sVClamped.asDiagonal();
+            
+            p.gradientE = svdU * svdClamped * svdV.transpose();
+            p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
+        } else {
+            p.gradientE = tempGradE;
+            p.gradientP = Matrix2d::Identity();
+        }
     }
     #ifndef NDEBUG
     double diffNorm = 0;
