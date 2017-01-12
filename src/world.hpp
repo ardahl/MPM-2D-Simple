@@ -42,6 +42,7 @@ public:
     int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
     double lambda, mu;                      //Lame Constants for stress
+    double massPropDamp;
     //Structures used for calculations
     double *mass;
     //No pressure projection, so no staggered grid needed

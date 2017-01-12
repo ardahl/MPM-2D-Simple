@@ -121,6 +121,8 @@ World::World(std::string config) {
         lambda = lameIn[0].asDouble();
         mu = lameIn[1].asDouble();
     }
+	massPropDamp = root.get("massPropDamp",0.99999).asDouble();
+
     auto gravityIn = root["gravity"];
     if (gravityIn.isNull() || gravityIn.size() != 2) {
         std::cout<< "no gravity" << std::endl;
@@ -590,7 +592,7 @@ void World::gridToParticles() {
         #endif
 		p.v = (alpha * flip) + ((1 - alpha) * pic);
         //Mass proportional damping
-        p.v *= 0.99999;
+        p.v *= massPropDamp;
         #ifndef NDEBUG
         if(p.v.hasNaN()) {
             printf("Vel has NaN\n");
