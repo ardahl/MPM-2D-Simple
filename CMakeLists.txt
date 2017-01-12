@@ -4,10 +4,10 @@ project(MPM)
 ###
 # Add build type that uses O3 but includes debugging flag
 ###
-SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -O3" CACHE STRING
+SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -O3 -Wno-deprecated-declarations" CACHE STRING
     "Flags used by the C++ compiler during optimized debugging builds."
     FORCE )
-SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -pedantic -O3" CACHE STRING
+SET( CMAKE_C_FLAGS_OPTDEBUG -Wno-deprecated-declarations"-Wall -pedantic -O3" CACHE STRING
     "Flags used by the C compiler during optimized debugging builds."
     FORCE )
 SET( CMAKE_EXE_LINKER_FLAGS_OPTDEBUG
@@ -110,26 +110,28 @@ set (SOURCES
 )
 
 #Simulation and Viewer
+add_library(mpmlib ${SOURCES})
+
 if(MPM_GRAPHICS)
-    add_executable(mpm_graphics ${SOURCES} ${SRC}/main_graphics.cpp)
-    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
+    add_executable(mpm_graphics ${SRC}/main_graphics.cpp)
+    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
 endif(MPM_GRAPHICS)
 
 #Standalone sim
 if(MPM_SIM)
-    add_executable(mpm ${SOURCES} ${SRC}/main.cpp)
-    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB})
+    add_executable(mpm ${SRC}/main.cpp)
+    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
 endif(MPM_SIM)
 
 #Data viewer
 if(MPM_VIEW)
-    add_executable(viewer ${SOURCES} ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} )
+    add_executable(viewer ${SRC}/viewer.cpp)
+    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
 endif(MPM_VIEW)
 
 #Simple Sampling Tool
 if(SAMPLER)
-    add_executable(sampler ${SOURCES} ${SRC}/sampler.cpp)
-    target_link_libraries(sampler ${PARTIO_LIBRARY} ${ZLIB})
+    add_executable(sampler ${SRC}/sampler.cpp)
+    target_link_libraries(sampler ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
 endif(SAMPLER)
 
