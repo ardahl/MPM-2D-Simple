@@ -128,7 +128,7 @@ void idle() {
         std::ofstream gradOut("grad.txt", std::ios_base::app);
         double norm = 0;
         for(size_t i = 0; i < world->particles.size(); i++) {
-            norm += world->particles[i].gradient.norm();
+            norm += world->particles[i].gradientE.norm();
         }
         gradOut << norm << "\n";
         gradOut.close();

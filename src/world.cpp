@@ -168,7 +168,7 @@ World::World(std::string config) {
     m = 0;
     #endif
     
->>>>>>> src/world.cpp
+	//>>>>>>> src/world.cpp
     if(objType == "square") {
         center = object + (Vector2d(size[0],size[1]) * 0.5);
         //Set up particles at each object vertex
@@ -697,7 +697,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	Partio::ParticleAttribute xattr;
 	Partio::ParticleAttribute uattr;
 	Partio::ParticleAttribute sattr;
-	Partio::ParticleAttribute gattr;
+	Partio::ParticleAttribute geattr;
+	Partio::ParticleAttribute gpattr;
 	Partio::ParticleAttribute cattr;
 	Partio::ParticleAttribute mattr;
 	Partio::ParticleAttribute rattr;
@@ -707,7 +708,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->addAttribute("position", Partio::VECTOR, 2);
 	data->addAttribute("velocity", Partio::VECTOR, 2);
 	data->addAttribute("stress", Partio::VECTOR, 4);
-	data->addAttribute("gradient", Partio::VECTOR, 4);
+	data->addAttribute("gradientE", Partio::VECTOR, 4);
+	data->addAttribute("gradientP", Partio::VECTOR, 4);
 	data->addAttribute("color", Partio::VECTOR, 3);
 	data->addAttribute("mass", Partio::FLOAT, 1);
 	data->addAttribute("rho", Partio::FLOAT, 1);
@@ -716,7 +718,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->attributeInfo("position", xattr);
 	data->attributeInfo("velocity", uattr);
 	data->attributeInfo("stress", sattr);
-	data->attributeInfo("gradient", gattr);
+	data->attributeInfo("gradientE", geattr);
+	data->attributeInfo("gradientP", gpattr);
 	data->attributeInfo("color", cattr);
 	data->attributeInfo("mass", mattr);
 	data->attributeInfo("rho", rattr);
@@ -727,7 +730,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		float *x = data->dataWrite<float>(xattr, i);
 		float *u = data->dataWrite<float>(uattr, i);
 		float *s = data->dataWrite<float>(sattr, i);
-		float *g = data->dataWrite<float>(gattr, i);
+		float *ge = data->dataWrite<float>(geattr, i);
+		float *gp = data->dataWrite<float>(gpattr, i);
 		float *c = data->dataWrite<float>(cattr, i);
 		float *m = data->dataWrite<float>(mattr, i);
 		float *r = data->dataWrite<float>(rattr, i);
@@ -736,7 +740,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		x[0] = p.x(0), x[1] = p.x(1);
         u[0] = p.v(0), u[1] = p.v(1);
 		s[0] = p.stress(0,0), s[1] = p.stress(0,1), s[2] = p.stress(1,0), s[3] = p.stress(1,1);
-		g[0] = p.gradient(0,0), g[1] = p.gradient(0,1), g[2] = p.gradient(1,0), g[3] = p.gradient(1,1);
+		ge[0] = p.gradientE(0,0), ge[1] = p.gradientE(0,1), ge[2] = p.gradientE(1,0), ge[3] = p.gradientE(1,1);
+		gp[0] = p.gradientP(0,0), gp[1] = p.gradientP(0,1), gp[2] = p.gradientP(1,0), gp[3] = p.gradientP(1,1);
 		c[0] = p.color(0), c[1] = p.color(1), s[2] = p.color(2);
 		m[0] = p.m;
 		r[0] = p.rho;
@@ -754,7 +759,8 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	Partio::ParticleAttribute xattr;
 	Partio::ParticleAttribute uattr;
 	Partio::ParticleAttribute sattr;
-	Partio::ParticleAttribute gattr;
+	Partio::ParticleAttribute geattr;
+	Partio::ParticleAttribute gpattr;
 	Partio::ParticleAttribute cattr;
 	Partio::ParticleAttribute mattr;
 	Partio::ParticleAttribute rattr;
@@ -763,7 +769,8 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	bool position = data->attributeInfo("position", xattr);
 	bool velocity = data->attributeInfo("velocity", uattr);
 	bool stress = data->attributeInfo("stress", sattr);
-	bool gradient = data->attributeInfo("gradient", gattr);
+	bool gradientE = data->attributeInfo("gradientE", geattr);
+	bool gradientP = data->attributeInfo("gradientP", gpattr);
 	bool color = data->attributeInfo("color", cattr);
 	bool mass = data->attributeInfo("mass", mattr);
 	bool rho = data->attributeInfo("rho", rattr);
@@ -791,11 +798,17 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	  } else {
 		p.stress = Matrix2d::Zero();
 	  }
-	  if (gradient) {
-		float *g = data->dataWrite<float>(gattr, i);
-		p.gradient(0,0) = g[0], p.gradient(0,1) = g[1], p.gradient(1,0) = g[2], p.gradient(1,1) = g[3];
+	  if (gradientE) {
+		float *g = data->dataWrite<float>(geattr, i);
+		p.gradientE(0,0) = g[0], p.gradientE(0,1) = g[1], p.gradientE(1,0) = g[2], p.gradientE(1,1) = g[3];
 	  } else {
-		p.gradient = Matrix2d::Identity();
+		p.gradientE = Matrix2d::Identity();
+	  }
+	  if (gradientP) {
+		float *g = data->dataWrite<float>(gpattr, i);
+		p.gradientP(0,0) = g[0], p.gradientP(0,1) = g[1], p.gradientP(1,0) = g[2], p.gradientP(1,1) = g[3];
+	  } else {
+		p.gradientP = Matrix2d::Identity();
 	  }
 	  if (color) {
 		float *c = data->dataWrite<float>(cattr, i);

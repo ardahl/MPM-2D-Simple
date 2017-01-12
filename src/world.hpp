@@ -21,8 +21,8 @@ public:
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
     double m;                  //mass
-    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
+    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
     double rho;         //density
     double vol;         //volume
     double compression; //critical compression (sec. 5 of stomahkin)

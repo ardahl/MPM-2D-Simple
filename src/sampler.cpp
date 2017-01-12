@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
   Vector2d object(0.0,1.5);
   int ores[2] = {101,101};
   double pmass = 1.0;
-  double rotation = 10.0;
+  double rotation = 100.0;
   
 #if 0
   Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 	  Vector2d d = pos-center;
 	  Vector2d vel = rotation*Vector2d(-d(1), d(0));
 
-	  Particle par(pos, vel, col, pmass);
+	  Particle par(pos, vel, col, pmass, 0.0, 0.0);
 	  parts.push_back(par);
 	}
   }
@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
 		Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
-		Particle par(pos, vel, col, pmass);
+		Particle par(pos, vel, col, pmass, 0.0, 0.0);
 		parts.push_back(par);
 	  }
 	}
