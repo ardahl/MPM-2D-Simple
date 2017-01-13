@@ -25,10 +25,8 @@ public:
     Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
     double rho;         //density
     double vol;         //volume
-    double compression; //critical compression (sec. 5 of stomahkin)
-    double stretch; //critical stretch (sec. 5 of stomahkin)
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m, double c, double s): 
-	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0), compression(c), stretch(s) {
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
+	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
           #ifndef NDEBUG
           x0 = x;
           #endif
@@ -41,16 +39,20 @@ public:
     int stepNum;
     double elapsedTime, dt, totalTime;
     std::string filename;
-    std::vector<Particle> particles;
     Eigen::Vector2d origin;                 //lower left and upper right positions
     int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
-    double lambda, mu;                      //Lame Constants for stress
-    double massPropDamp;
     //Structures used for calculations
     double *mass;
     //No pressure projection, so no staggered grid needed
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
+
+    // particle object
+    std::vector<Particle> particles;
+    double lambda, mu;                      //Lame Constants for stress
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
+    double massPropDamp;
 
     // external forces
     Eigen::Vector2d gravity;
