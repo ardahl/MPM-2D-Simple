@@ -48,8 +48,51 @@ World::World(std::string config) {
 	dt = root.get("dt", 1.0/30.0).asDouble();
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
+    double lambda, mu;                      //Lame Constants for stress
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
+    double massPropDamp, alpha;
+	// read global material properties, these may be overridden per object
+    auto lameIn = root["lame"];
+    if (lameIn.size() != 2) {
+        std::cout<< "bad lame, skipping" << std::endl;
+    } 
+    else {
+        lambda = lameIn[0].asDouble();
+        mu = lameIn[1].asDouble();
+    }
+	massPropDamp = root.get("massPropDamp",0.99999).asDouble();
+	alpha = root.get("alpha",0.95).asDouble();
+
+
+    auto stretchIn = root["stretch"];
+    auto compressIn = root["compression"];
+    if (stretchIn.isNull() || compressIn.isNull()){
+        plasticEnabled = false;
+        std::cout << "no plasticity" << std::endl;
+        compression = 0.0;
+        stretch = 0.0;
+    } else {
+        plasticEnabled = true;
+        compression = compressIn.asDouble();
+        stretch = stretchIn.asDouble();
+        std::cout << "Compression: " << compression << std::endl;
+        std::cout << "Stretch: " << stretch << std::endl;
+    }
+  
+    double pmass = root["mass"].asDouble();
+    auto colorIn = root["color"];
+    if (colorIn.size() != 3) {
+        std::cout<< "bad color, skipping" << std::endl;
+    } 
+    else {
+        c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
+    }
+
+
     auto objectsIn = root["objects"];
     for (auto i : range(objectsIn.size())) {
+  	    objects.emplace_back();
         objType = objectsIn[i].get("type", "square").asString();
 		if (objType == "square" || objType == "circle") {
 		  auto locationIn = objectsIn[i]["location"];
@@ -74,14 +117,26 @@ World::World(std::string config) {
 		  ores[0] = resIn[0].asInt();
 		  ores[1] = resIn[1].asInt();
 		} else {
-		  std::vector<Particle> parts;
 		  auto const pos = config.find_last_of('/');
 		  std::string partfilename = config.substr(0, pos+1);
 		  partfilename = partfilename + objectsIn[i].get("filename", "input.bgeo").asString();
-		  std::cout<<partfilename<<std::endl;
-		  readParticles(partfilename.c_str(), parts);
-		  particles.insert(particles.end(), parts.begin(), parts.end());
+		  std::cout<<"loading "<<partfilename<<std::endl;
+		  readParticles(partfilename.c_str(), objects[i].particles);
 		}
+		MaterialProps &mp = objects[i].mp;
+		auto lameIn = objectsIn[i]["lame"];
+		if (lameIn.size() == 2) {
+		  mp.lambda = lameIn[0].asDouble();
+		  mp.mu = lameIn[1].asDouble();
+		} else {
+		  mp.lambda = lambda;
+		  mp.mu = mu;
+		}
+		mp.massPropDamp = objectsIn[i].get("massPropDamp",massPropDamp).asDouble();
+		mp.alpha = objectsIn[i].get("alpha",alpha).asDouble();
+		mp.stretch = objectsIn[i].get("stretch", stretch).asDouble();
+		mp.compression = objectsIn[i].get("compression", stretch).asDouble();
+		mp.pmass = objectsIn[i].get("compression", pmass).asDouble();
     }
 
     auto gridIn = root["grid"]; 
@@ -106,25 +161,6 @@ World::World(std::string config) {
         }
     }
   
-    double pmass = root["mass"].asDouble();
-    auto colorIn = root["color"];
-    if (colorIn.size() != 3) {
-        std::cout<< "bad color, skipping" << std::endl;
-    } 
-    else {
-        c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
-    }
-
-    auto lameIn = root["lame"];
-    if (lameIn.size() != 2) {
-        std::cout<< "bad lame, skipping" << std::endl;
-    } 
-    else {
-        lambda = lameIn[0].asDouble();
-        mu = lameIn[1].asDouble();
-    }
-	massPropDamp = root.get("massPropDamp",0.99999).asDouble();
-
     auto gravityIn = root["gravity"];
     if (gravityIn.isNull() || gravityIn.size() != 2) {
         std::cout<< "no gravity" << std::endl;
@@ -146,21 +182,6 @@ World::World(std::string config) {
         rotation = rotationIn.asDouble();
     }
     
-    auto stretchIn = root["stretch"];
-    auto compressIn = root["compression"];
-    if (stretchIn.isNull() || compressIn.isNull()){
-        plasticEnabled = false;
-        std::cout << "no plasticity" << std::endl;
-        compression = 0.0;
-        stretch = 0.0;
-    } else {
-        plasticEnabled = true;
-        compression = compressIn.asDouble();
-        stretch = stretchIn.asDouble();
-        std::cout << "Compression: " << compression << std::endl;
-        std::cout << "Stretch: " << stretch << std::endl;
-    }
-  
     origin(0) += h/2.0; origin(1) += h/2.0;
     #ifndef NDEBUG
     m = 0;
@@ -176,7 +197,7 @@ World::World(std::string config) {
                 Vector2d pos = object + Vector2d(diffx*i, diffy*j);
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Particle par(pos, Vector2d(0,0), col, pmass);
-                particles.push_back(par);
+                objects[0].particles.push_back(par);
                 #ifndef NDEBUG
                 m += pmass;
                 #endif
@@ -201,7 +222,7 @@ World::World(std::string config) {
                 if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
                     Particle par(pos, Vector2d(0,0), col, pmass);
                     //Particle par(pos, pos, col, pmass);
-                    particles.push_back(par);
+                    objects[0].particles.push_back(par);
                     #ifndef NDEBUG
                     m += pmass;
                     #endif
@@ -212,12 +233,12 @@ World::World(std::string config) {
   
     //Average position for center of mass
     Vector2d avePos = Vector2d::Zero();
-    for(size_t i = 0; i < particles.size(); i++) {
-        avePos += particles[i].x;
+    for(size_t i = 0; i < objects[0].particles.size(); i++) {
+        avePos += objects[0].particles[i].x;
     }
-    avePos /= particles.size();
+    avePos /= objects[0].particles.size();
   
-    printf("Number of particles: %d\n", (int)particles.size());
+    printf("Number of particles: %d\n", (int)objects[0].particles.size());
     printf("Dimentions: %dx%d\n", res[0], res[1]);
     printf("Grid Spacing: %f\n", h);
     printf("Lame Constants: %f, %f\n", lambda, mu);
@@ -292,7 +313,9 @@ inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *
  *****************************/
 void World::particleVolumesDensities() {
     particlesToGrid();
-    for(size_t i = 0; i < particles.size(); i++) {
+	for (unsigned int obj = 0; obj<objects.size(); obj++) {
+	  std::vector<Particle> &particles = objects[obj].particles;
+	  for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
 		p.rho = 0.0;
 		Vector2d offset = (p.x - origin) / h;
@@ -319,7 +342,8 @@ void World::particleVolumesDensities() {
             exit(0);
         }
         #endif
-    }
+	  }
+	}
 }
 
 /******************************
@@ -366,7 +390,9 @@ void World::particlesToGrid() {
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
 
-    for(size_t i = 0; i < particles.size(); i++) {
+	for (unsigned int obj = 0; obj<objects.size(); obj++) {
+	  std::vector<Particle> &particles = objects[obj].particles;
+	  for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
@@ -379,6 +405,7 @@ void World::particlesToGrid() {
                 vel [j*res[1] + k] += w * p.m * p.v;
             }
         }
+	  }
 	}
     /// #pragma omp parallel for collapse(2)
 	double tmass = 0.0;
@@ -419,14 +446,16 @@ void World::particlesToGrid() {
 void World::computeGridForces() {
   auto timer = prof.timeName("computeGridForces");
     {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
-
-    for(size_t i = 0; i < particles.size(); i++) {
+	for (unsigned int obj = 0; obj<objects.size(); obj++) {
+	  std::vector<Particle> &particles = objects[obj].particles;
+	  MaterialProps &mp = objects[obj].mp;
+	  for(size_t i = 0; i < particles.size(); i++) {
         Particle &p = particles[i];
         Matrix2d gradient = p.gradientE*p.gradientP; 
         double J = gradient.determinant();
         Matrix2d eps = 0.5 * (gradient.transpose() * gradient - Matrix2d::Identity());
         double trace = eps.trace();
-        Matrix2d stress = lambda*trace*Matrix2d::Identity() + 2.0*mu*eps;
+        Matrix2d stress = mp.lambda*trace*Matrix2d::Identity() + 2.0*mp.mu*eps;
 
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
@@ -448,7 +477,8 @@ void World::computeGridForces() {
                 #endif
             }
         }
-    }
+	  }
+	}
 }
 
 /******************************
@@ -501,9 +531,13 @@ void World::updateGridVelocities() {
  *****************************/
 void World::updateGradient() {
   auto timer = prof.timeName("updateGradient");
+  for (unsigned int obj=0; obj<objects.size(); obj++) {
+	std::vector<Particle> &particles = objects[obj].particles;
+	MaterialProps &mp = objects[obj].mp;
+
     /// #pragma omp parallel for 
     for(size_t i = 0; i < particles.size(); i++) {
-        Particle &p = particles[i];
+	    Particle &p = particles[i];
         Matrix2d gradV = Matrix2d::Zero();
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
@@ -548,7 +582,7 @@ void World::updateGradient() {
             Matrix2d svdV = svd.matrixV();
             
             Vector2d sVClamped;
-            sVClamped << clamp(svdSV(0), 1-compression, 1+stretch), clamp(svdSV(1), 1-compression, 1+stretch);
+            sVClamped << clamp(svdSV(0), 1-mp.compression, 1+mp.stretch), clamp(svdSV(1), 1-mp.compression, 1+mp.stretch);
             Matrix2d svdClamped = sVClamped.asDiagonal();
             
             p.gradientE = svdU * svdClamped * svdV.transpose();
@@ -557,7 +591,8 @@ void World::updateGradient() {
             p.gradientE = tempGradE;
             p.gradientP = Matrix2d::Identity();
         }
-    }
+	}
+  }
     #ifndef NDEBUG
     double diffNorm = 0;
     angle += rotation*dt*(M_PI/2.0)/m;
@@ -589,7 +624,9 @@ void World::updateGradient() {
  *****************************/
 void World::gridToParticles() {
   auto timer = prof.timeName("gridToParticles");
-    double alpha = 0.95;
+  for (unsigned int obj=0; obj<objects.size(); obj++) {
+	std::vector<Particle> &particles = objects[obj].particles;
+	MaterialProps &mp = objects[obj].mp;
     /// #pragma omp parallel for
 	Vector2d com(0.0,0.0);
     for(size_t i = 0; i < particles.size(); i++) {
@@ -632,9 +669,9 @@ void World::gridToParticles() {
             exit(0);
         }
         #endif
-		p.v = (alpha * flip) + ((1 - alpha) * pic);
+		p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
         //Mass proportional damping
-        p.v *= massPropDamp;
+        p.v *= mp.massPropDamp;
         #ifndef NDEBUG
         if(p.v.hasNaN()) {
             printf("Vel has NaN\n");
@@ -682,7 +719,8 @@ void World::gridToParticles() {
             p.x(1) = uy-EPS;
             p.v(1) *= -1;
         }
-    }
+	}
+  }
     #ifndef NDEBUG
     debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
     #endif

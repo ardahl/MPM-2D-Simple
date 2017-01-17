@@ -102,16 +102,18 @@ void display() {
     }
     glEnd();
     //just draw the particles 
-    std::vector<Particle> ps = world->particles;
-    glPointSize(5);
-    glColor3f(0,0,0);
-    glBegin(GL_POINTS);
-    for(size_t i = 0; i < ps.size(); i++) {
+	glPointSize(5);
+	glColor3f(0,0,0);
+	glBegin(GL_POINTS);
+	for (unsigned int obj = 0; obj < world->objects.size(); obj++) {
+	  std::vector<Particle> ps = world->objects[obj].particles;
+	  for(size_t i = 0; i < ps.size(); i++) {
         Particle &p = ps[i];
         glColor3f(p.color(0), p.color(1), p.color(2));
         glVertex2f((p.x(0)-x0(0))/x10(0), (p.x(1)-x0(1))/x10(1));
-    }
-    glEnd();
+	  }
+	}
+	glEnd();
     glReadPixels(0, 0, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
     cv::flip(img, flipped, 0);
     output << flipped;
@@ -127,8 +129,8 @@ void idle() {
     if(frame % 30 == 0) {
         std::ofstream gradOut("grad.txt", std::ios_base::app);
         double norm = 0;
-        for(size_t i = 0; i < world->particles.size(); i++) {
-            norm += world->particles[i].gradientE.norm();
+        for(size_t i = 0; i < world->objects[0].particles.size(); i++) {
+            norm += world->objects[0].particles[i].gradientE.norm();
         }
         gradOut << norm << "\n";
         gradOut.close();

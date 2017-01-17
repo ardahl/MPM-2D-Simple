@@ -20,7 +20,7 @@ int frame = 0;
 bool next = true;
 
 World *world;
-std::vector<std::vector<Particle> > frames;
+std::vector<std::vector<std::vector<Particle> > > frames;
 
 cv::Mat img(height, width, CV_8UC3);
 cv::Mat flipped(height, width, CV_8UC3);
@@ -32,16 +32,21 @@ void reshape(int w, int h) {
     glViewport(0, 0, width, height);
 }
 
-bool readAnimation(const char *fname, std::vector<std::vector<Particle> > &frames) {
+bool readAnimation(const char *fname, std::vector<std::vector<std::vector<Particle> > > &frames) {
 	for (int frame = 0; true; frame++) {
+	  std::vector<std::vector<Particle> > objects;
+	  for (int obj = 0; true; obj++) {
    	    std::vector<Particle> parts;
    	    std::ostringstream ss;
-		ss << std::setw(5) << std::setfill('0') << frame;
+		ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(5)<< frame;
 		std::string pframe(ss.str());
-		std::string parIn = std::string(fname) + "." + pframe + ".bgeo";
+		std::string parIn = std::string(fname) + "-" + pframe + ".bgeo";
 		if (!readParticles(parIn.c_str(), parts)) break;
 		if (parts.size() == 0) break;
-		frames.push_back(parts);
+		objects.push_back(parts);
+	  }
+	  if (objects.size() == 0) break;
+	  frames.push_back(objects);
 	}
     
     return true;
@@ -95,11 +100,14 @@ void display() {
     glPointSize(5);
     glColor3f(0,0,0);
     glBegin(GL_POINTS);
+	
     for(size_t i = 0; i < frames[frame].size(); i++) {
-        Particle &p = frames[frame][i];
+	  for(size_t j = 0; j < frames[frame][i].size(); j++) {
+        Particle &p = frames[frame][i][j];
         glColor3f(p.color(0), p.color(1), p.color(2));
         glVertex2f((p.x(0)-x0(0))/x10(0), (p.x(1)-x0(1))/x10(1));
-    }
+	  }
+	}
     glEnd();
     glReadPixels(0, 0, img.cols, img.rows, GL_BGR, GL_UNSIGNED_BYTE, img.data);
     cv::flip(img, flipped, 0);

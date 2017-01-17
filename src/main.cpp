@@ -35,22 +35,24 @@ int main(int argc, char** argv) {
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());
 #endif
-  
+	
     std::string config = std::string(argv[1]);
     World world(config);
     world.init();
   
 	while (world.elapsedTime < world.totalTime) {
-	  if (timeSinceLastFrame > 1.0/30.0) {
-   	    std::ostringstream ss;
-		ss << std::setw(5) << std::setfill('0') << frame;
-		std::string pframe(ss.str());
-		std::string parOut = outfile + "." + pframe + ".bgeo";
-        writeParticles(parOut.c_str(), world.particles);
-		frame++;
-		iters = 0;
-		timeSinceLastFrame = world.dt;
-		printf("\n");
+      if (timeSinceLastFrame > 1.0/30.0) {
+        for (unsigned int obj = 0; obj<world.objects.size(); obj++) {
+		  std::ostringstream ss;
+		  ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(5)<< frame;
+		  std::string pframe(ss.str());
+		  std::string parOut = outfile + "-" + pframe + ".bgeo";
+		  writeParticles(parOut.c_str(), world.objects[obj].particles);
+		  frame++;
+		  iters = 0;
+		  timeSinceLastFrame = world.dt;
+		  printf("\n");
+		}
 	  }
 	  
 	  world.step();

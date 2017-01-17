@@ -34,6 +34,19 @@ public:
     Particle() {}
 };
 
+struct MaterialProps {
+    double lambda, mu;                      //Lame Constants for stress
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
+  double massPropDamp, pmass, alpha;
+};
+
+struct Object {
+  MaterialProps mp;
+  std::vector<Particle> particles;
+};
+  
+
 class World {
 public:
     int stepNum;
@@ -48,11 +61,8 @@ public:
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
 
     // particle object
-    std::vector<Particle> particles;
-    double lambda, mu;                      //Lame Constants for stress
-    double compression; //critical compression (sec. 5 of stomahkin)
-    double stretch; //critical stretch (sec. 5 of stomahkin)
-    double massPropDamp;
+    //std::vector<Particle> particles;
+    std::vector<Object> objects;
 
     // external forces
     Eigen::Vector2d gravity;
@@ -71,7 +81,7 @@ public:
   ~World();
      //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
-    std::vector<Particle> getParticles() { return particles; }
+  //std::vector<Particle> getParticles() { return particles; }
     //Perform a step of length dt
     void step();
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities
