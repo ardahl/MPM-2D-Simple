@@ -24,6 +24,10 @@ int count = 0;
 
 //TODO: Print out info from parsing the json.
 
+//Run with linear velocity. Should get no dampening.
+//Try changing the mass to object mass rather than particle mass
+//APIC transfers rather than FLIP/PIC
+
 World::World(std::string config) {
     stepNum = 0;
     elapsedTime = 0.0;
@@ -253,6 +257,7 @@ World::World(std::string config) {
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
+    D = new Matrix2d[res[0]*res[1]];
     //TODO: Check gradient
     
     #ifndef NDEBUG
@@ -389,6 +394,7 @@ void World::particlesToGrid() {
   auto timer = prof.timeName("particlesToGrid");
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
+    {Matrix2d *d = D; for (int i=0; i<res[0]*res[1]; i++, d++) (*d) = Matrix2d::Zero();}
 
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
 	  std::vector<Particle> &particles = objects[obj].particles;
@@ -397,12 +403,25 @@ void World::particlesToGrid() {
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
 		bounds(offset, res, xbounds, ybounds);
+        Vector2d xp = p.x;                                      //particle position
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
    		    double w1 = weight(offset(0) - j);
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
     			double w = w1*weight(offset(1) - k);
+                Vector2d xg = origin + h*Vector2d(j, k);        //grid position
+                
                 mass[j*res[1] + k] += w * p.m;
-                vel [j*res[1] + k] += w * p.m * p.v;
+                D[i] += w*xg*xg.transpose() - xp*xp.transpose();
+                /// vel [j*res[1] + k] += w * p.m * p.v;
+            }
+        }
+        for(int j = xbounds[0]; j < xbounds[1]; j++) {
+   		    double w1 = weight(offset(0) - j);
+            for(int k = ybounds[0]; k < ybounds[1]; k++) {
+    			double w = w1*weight(offset(1) - k);
+                Vector2d xg = origin + h*Vector2d(j, k);
+                
+                vel[j*res[1] + k] += w * p.m * (p.v + p.B*D[i].inverse()*(xg-xp));
             }
         }
 	  }
@@ -639,9 +658,11 @@ void World::gridToParticles() {
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
-        Vector2d pic = Vector2d::Zero();
-        Vector2d flip = p.v;
-        Vector2d tmpPic, tmpFlip;
+        /// Vector2d pic = Vector2d::Zero();
+        /// Vector2d flip = p.v;
+        /// Vector2d tmpPic, tmpFlip;
+        p.B = Matrix2d::Zero();
+        Vector2d apic = Vector2d::Zero();
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
 		bounds(offset, res, xbounds, ybounds);
@@ -650,11 +671,14 @@ void World::gridToParticles() {
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
     			double w = w1*weight(offset(1) - k);
 				int index = j*res[1] + k;
-                tmpPic = w * velStar[index];
-                pic += tmpPic;
+                Vector2d xg = origin + h*Vector2d(j, k);
+                /// tmpPic = w * velStar[index];
+                /// pic += tmpPic;
 
-                tmpFlip = w * (velStar[index] - vel[index]);
-                flip += tmpFlip;
+                /// tmpFlip = w * (velStar[index] - vel[index]);
+                /// flip += tmpFlip;
+                apic += w * velStar[index];
+                p.B += w * velStar[index] * (xg - p.x).transpose();
             }
         }
         #ifndef NDEBUG
@@ -669,9 +693,11 @@ void World::gridToParticles() {
             exit(0);
         }
         #endif
-		p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
+		/// p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
+        p.v = apic;
         //Mass proportional damping
         p.v *= mp.massPropDamp;
+        
         #ifndef NDEBUG
         if(p.v.hasNaN()) {
             printf("Vel has NaN\n");

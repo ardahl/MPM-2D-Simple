@@ -17,6 +17,7 @@ public:
     #endif
     //Temp
     Eigen::Matrix2d stress;
+    Eigen::Matrix2d B;         //B matrix from APIC paper
     
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
@@ -52,13 +53,14 @@ public:
     int stepNum;
     double elapsedTime, dt, totalTime;
     std::string filename;
-    Eigen::Vector2d origin;                 //lower left and upper right positions
+    Eigen::Vector2d origin;                 //lower left position
     int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
     //Structures used for calculations
     double *mass;
     //No pressure projection, so no staggered grid needed
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
+    Eigen::Matrix2d *D;
 
     // particle object
     //std::vector<Particle> particles;
