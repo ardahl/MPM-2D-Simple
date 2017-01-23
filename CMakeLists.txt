@@ -4,10 +4,10 @@ project(MPM)
 ###
 # Add build type that uses O3 but includes debugging flag
 ###
-SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -O3" CACHE STRING
+SET( CMAKE_CXX_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -O3 -g" CACHE STRING
     "Flags used by the C++ compiler during optimized debugging builds."
     FORCE )
-SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -pedantic -O3" CACHE STRING
+SET( CMAKE_C_FLAGS_OPTDEBUG "-Wall -Wno-deprecated-declarations -pedantic -O3 -g" CACHE STRING
     "Flags used by the C compiler during optimized debugging builds."
     FORCE )
 SET( CMAKE_EXE_LINKER_FLAGS_OPTDEBUG

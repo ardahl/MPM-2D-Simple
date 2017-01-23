@@ -27,7 +27,7 @@ public:
     double rho;         //density
     double vol;         //volume
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
+	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
           #ifndef NDEBUG
           x0 = x;
           #endif
@@ -60,7 +60,6 @@ public:
     double *mass;
     //No pressure projection, so no staggered grid needed
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
-    Eigen::Matrix2d *D;
 
     // particle object
     //std::vector<Particle> particles;

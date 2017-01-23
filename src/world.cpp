@@ -257,7 +257,6 @@ World::World(std::string config) {
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
-    D = new Matrix2d[res[0]*res[1]];
     //TODO: Check gradient
     
     #ifndef NDEBUG
@@ -394,16 +393,18 @@ void World::particlesToGrid() {
   auto timer = prof.timeName("particlesToGrid");
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
-    {Matrix2d *d = D; for (int i=0; i<res[0]*res[1]; i++, d++) (*d) = Matrix2d::Zero();}
 
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
 	  std::vector<Particle> &particles = objects[obj].particles;
+      Matrix2d D[particles.size()];
 	  for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
+        D[i] = Matrix2d::Zero();
 		Vector2d offset = (p.x - origin) / h;
 		int xbounds[2], ybounds[2];
 		bounds(offset, res, xbounds, ybounds);
         Vector2d xp = p.x;                                      //particle position
+        RowVector2d xpT = xp.transpose();                       
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
    		    double w1 = weight(offset(0) - j);
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
@@ -411,7 +412,11 @@ void World::particlesToGrid() {
                 Vector2d xg = origin + h*Vector2d(j, k);        //grid position
                 
                 mass[j*res[1] + k] += w * p.m;
-                D[i] += w*xg*xg.transpose() - xp*xp.transpose();
+                RowVector2d xgT = xg.transpose();
+                Matrix2d t1 = xg * xgT;
+                t1 = w * t1;
+                Matrix2d t2 = xp * xpT;
+                D[i] = D[i] + (t1 - t2);
                 /// vel [j*res[1] + k] += w * p.m * p.v;
             }
         }
@@ -612,16 +617,16 @@ void World::updateGradient() {
         }
 	}
   }
-    #ifndef NDEBUG
-    double diffNorm = 0;
-    angle += rotation*dt*(M_PI/2.0)/m;
-    Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
-    for(unsigned int i = 0; i < particles.size(); i++) {
-        Matrix2d diff = particles[i].gradient - rotM;
-        diffNorm += diff.norm();
-    }
-    debug << elapsedTime << " " << diffNorm;
-    #endif
+    /// #ifndef NDEBUG
+    /// double diffNorm = 0;
+    /// angle += rotation*dt*(M_PI/2.0)/m;
+    /// Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
+    /// for(unsigned int i = 0; i < particles.size(); i++) {
+        /// Matrix2d diff = particles[i].gradient - rotM;
+        /// diffNorm += diff.norm();
+    /// }
+    /// debug << elapsedTime << " " << diffNorm;
+    /// #endif
 }
 
 /******************************
@@ -682,14 +687,9 @@ void World::gridToParticles() {
             }
         }
         #ifndef NDEBUG
-        if(pic.hasNaN()) {
-            printf("\n\nPIC Vel has NaN\n");
-            std::cout << pic << std::endl;
-            exit(0);
-        }
-        if(flip.hasNaN()) {
-            printf("FLIP Vel has NaN\n");
-            std::cout << flip << std::endl;
+        if(apic.hasNaN()) {
+            printf("\n\nAPIC Vel has NaN\n");
+            std::cout << apic << std::endl;
             exit(0);
         }
         #endif
@@ -708,12 +708,11 @@ void World::gridToParticles() {
 
         //Update Positions
         p.x += dt * p.v;
-        #ifndef NDEBUG
-        p.x1 = p.gradient * p.x0;
-        Vector2d diff = p.x - p.x1;
-        normDiff += diff.norm();
-        /// p.x = p.x1;
-        #endif
+        /// #ifndef NDEBUG
+        /// p.x1 = p.gradient * p.x0;
+        /// Vector2d diff = p.x - p.x1;
+        /// normDiff += diff.norm();
+        /// #endif
         
         #ifndef NDEBUG
         if(p.x.hasNaN()) {
@@ -747,9 +746,9 @@ void World::gridToParticles() {
         }
 	}
   }
-    #ifndef NDEBUG
-    debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
-    #endif
+    /// #ifndef NDEBUG
+    /// debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
+    /// #endif
 }
 
 
