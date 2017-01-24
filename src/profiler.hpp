@@ -58,7 +58,7 @@ namespace benlib{
 	
 	template <typename units>
 	void dump(std::ostream& outs = std::cout){
-	  for(auto i = 0; i < counts.size(); ++i){
+	  for(auto i = 0; i < (int)counts.size(); ++i){
 		outs << nameMap[i] << '\t' << std::chrono::duration_cast<units>(counts[i]).count() << '\n';
 	  }
 	}
@@ -67,7 +67,7 @@ namespace benlib{
 	  auto total = std::accumulate(counts.begin(), 
 								   counts.end(),
 								   duration<double>{});
-	  for(auto i = 0; i < counts.size(); ++i){
+	  for(auto i = 0; i < (int)counts.size(); ++i){
 		outs << nameMap[i] << '\t' << 100*counts[i].count()/total.count() << "%\n";
 	  }
 	}

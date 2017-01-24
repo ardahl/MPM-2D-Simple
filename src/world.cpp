@@ -39,18 +39,16 @@ World::World(std::string config) {
                   << jReader.getFormattedErrorMessages() << std::endl;
         std::exit(1);
     }
-    double size[2] = {0.0, 0.0};
-    Vector2d object;
+    
     Vector3d c;
     std::string str, objType = "square";
-    int ores[2] = {1, 1};
 
 	dt = root.get("dt", 1.0/30.0).asDouble();
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
-    double lambda, mu;                      //Lame Constants for stress
-    double compression; //critical compression (sec. 5 of stomahkin)
-    double stretch; //critical stretch (sec. 5 of stomahkin)
+    double lambda=1, mu=1;                      //Lame Constants for stress
+    double compression;                     //critical compression (sec. 5 of stomahkin)
+    double stretch;                         //critical stretch (sec. 5 of stomahkin)
     double massPropDamp, alpha;
 	// read global material properties, these may be overridden per object
     auto lameIn = root["lame"];
@@ -83,7 +81,7 @@ World::World(std::string config) {
     double pmass = root["mass"].asDouble();
     auto colorIn = root["color"];
     if (colorIn.size() != 3) {
-        std::cout<< "bad color, skipping" << std::endl;
+        c = Vector3d(1, 0, 0);
     } 
     else {
         c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
@@ -94,28 +92,33 @@ World::World(std::string config) {
     for (auto i : range(objectsIn.size())) {
   	    objects.emplace_back();
         objType = objectsIn[i].get("type", "square").asString();
+        objects[i].type = objType;
 		if (objType == "square" || objType == "circle") {
 		  auto locationIn = objectsIn[i]["location"];
 		  if (locationIn.size() != 2) {
             std::cout<< "bad object location, skipping" << std::endl;
             continue;
 		  }
-		  object(0) = locationIn[0].asDouble();
-		  object(1) = locationIn[1].asDouble();
+		  objects[i].object(0) = locationIn[0].asDouble();
+		  objects[i].object(1) = locationIn[1].asDouble();
 		  auto sizeIn = objectsIn[i]["size"];
 		  if (sizeIn.size() != 2) {
             std::cout<< "bad object size, skipping" << std::endl;
+            objects[i].size[0] = 0;
+            objects[i].size[1] = 0;
             continue;
 		  }
-		  size[0] = sizeIn[0].asDouble();
-		  size[1] = sizeIn[1].asDouble();
+		  objects[i].size[0] = sizeIn[0].asDouble();
+		  objects[i].size[1] = sizeIn[1].asDouble();
 		  auto resIn = objectsIn[i]["resolution"];
 		  if (resIn.size() != 2) {
             std::cout<< "bad object resolution, skipping" << std::endl;
+            objects[i].ores[0] = 1;
+            objects[i].ores[0] = 1;
             continue;
 		  }
-		  ores[0] = resIn[0].asInt();
-		  ores[1] = resIn[1].asInt();
+		  objects[i].ores[0] = resIn[0].asInt();
+		  objects[i].ores[1] = resIn[1].asInt();
 		} else {
 		  auto const pos = config.find_last_of('/');
 		  std::string partfilename = config.substr(0, pos+1);
@@ -136,7 +139,14 @@ World::World(std::string config) {
 		mp.alpha = objectsIn[i].get("alpha",alpha).asDouble();
 		mp.stretch = objectsIn[i].get("stretch", stretch).asDouble();
 		mp.compression = objectsIn[i].get("compression", stretch).asDouble();
-		mp.pmass = objectsIn[i].get("compression", pmass).asDouble();
+		mp.mass = objectsIn[i].get("mass", pmass).asDouble();
+        auto colorIn = objectsIn[i]["color"];
+        if (colorIn.size() == 3) {
+            objects[i].color = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
+        }
+        else {
+            objects[i].color = c;
+        }
     }
 
     auto gridIn = root["grid"]; 
@@ -183,70 +193,85 @@ World::World(std::string config) {
     }
     
     origin(0) += h/2.0; origin(1) += h/2.0;
-    #ifndef NDEBUG
-    m = 0;
-    #endif
     
-    if(objType == "square") {
-        center = object + (Vector2d(size[0],size[1]) * 0.5);
-        //Set up particles at each object vertex
-        double diffx = size[0] / (ores[0]-1);
-        double diffy = size[1] / (ores[1]-1);
-        for(int i = 0; i < ores[0]; i++) {
-            for(int j = 0; j < ores[1]; j++) {
-                Vector2d pos = object + Vector2d(diffx*i, diffy*j);
-                Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-                Particle par(pos, Vector2d(0,0), col, pmass);
-                objects[0].particles.push_back(par);
-                #ifndef NDEBUG
-                m += pmass;
-                #endif
+    for(size_t o = 0; o < objects.size(); o++) {
+        Object& obj = objects[o];
+        if(obj.type == "square") {
+            center = obj.object + (Vector2d(obj.size[0],obj.size[1]) * 0.5);
+            //Set up particles at each object vertex
+            double diffx = obj.size[0] / (obj.ores[0]-1);
+            double diffy = obj.size[1] / (obj.ores[1]-1);
+            for(int i = 0; i < obj.ores[0]; i++) {
+                for(int j = 0; j < obj.ores[1]; j++) {
+                    Vector2d pos = obj.object + Vector2d(diffx*i, diffy*j);
+                    Vector3d col = ((double)j/(obj.ores[1]-1))*obj.color;
+                    Particle par(pos, Vector2d(0,0), col, 1);
+                    obj.particles.push_back(par);
+                }
+            }
+            double partMass = obj.mp.mass / obj.particles.size();
+            for(size_t i = 0; i < obj.particles.size(); i++) {
+                obj.particles[i].m = partMass;
             }
         }
-    }
-    if(objType == "circle") {
-        printf("Making Circle\n");
-        center = object;
-        //non-randomly make a circle
-        //technically this is an ellipse because I'm using the same data as the
-        //square and just using the size vector as radius of the semi-major and semi-minor axes
-        //just make a square and reject those outside the ellipse.
-        //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
-        double diffx = 2*size[0] / (ores[0]-1);
-        double diffy = 2*size[1] / (ores[1]-1);
-        for(int i = 0; i < ores[0]; i++) {
-            for(int j = 0; j < ores[1]; j++) {
-                Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
-                Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
-                Vector2d ph = pos - object;
-                if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-                    Particle par(pos, Vector2d(0,0), col, pmass);
-                    //Particle par(pos, pos, col, pmass);
-                    objects[0].particles.push_back(par);
-                    #ifndef NDEBUG
-                    m += pmass;
-                    #endif
+        if(obj.type == "circle") {
+            center = obj.object;
+            //non-randomly make a circle
+            //technically this is an ellipse because I'm using the same data as the
+            //square and just using the size vector as radius of the semi-major and semi-minor axes
+            //just make a square and reject those outside the ellipse.
+            //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
+            double diffx = 2*obj.size[0] / (obj.ores[0]-1);
+            double diffy = 2*obj.size[1] / (obj.ores[1]-1);
+            for(int i = 0; i < obj.ores[0]; i++) {
+                for(int j = 0; j < obj.ores[1]; j++) {
+                    Vector2d pos = center - Vector2d(obj.size[0], obj.size[1]) + Vector2d(diffx*i, diffy*j);
+                    Vector3d col = ((double)j/(obj.ores[1]-1))*obj.color;
+                    Vector2d ph = pos - obj.object;
+                    if( ((ph(0)*ph(0))/(obj.size[0]*obj.size[0])) + ((ph(1)*ph(1))/(obj.size[1]*obj.size[1])) < 1+EPS) {
+                        Particle par(pos, Vector2d(0,0), col, 1);
+                        obj.particles.push_back(par);
+                    }
                 }
+            }
+            double partMass = obj.mp.mass / obj.particles.size();
+            for(size_t i = 0; i < obj.particles.size(); i++) {
+                obj.particles[i].m = partMass;
             }
         }
     }
   
     //Average position for center of mass
-    Vector2d avePos = Vector2d::Zero();
-    for(size_t i = 0; i < objects[0].particles.size(); i++) {
-        avePos += objects[0].particles[i].x;
+    for(size_t i = 0; i < objects.size(); i++) {
+        Vector2d avePos = Vector2d::Zero();
+        for(size_t j = 0; j < objects[i].particles.size(); j++) {
+            avePos += objects[i].particles[j].x;
+        }
+        avePos /= objects[i].particles.size();
+        objects[i].center = avePos;
     }
-    avePos /= objects[0].particles.size();
   
-    printf("Number of particles: %d\n", (int)objects[0].particles.size());
+    printf("Grid:\n");
     printf("Dimentions: %dx%d\n", res[0], res[1]);
     printf("Grid Spacing: %f\n", h);
-    printf("Lame Constants: %f, %f\n", lambda, mu);
-    printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
-    printf("Center of Mass: (%f, %f), (%f, %f)\n", center(0), center(1), avePos(0), avePos(1));
-    printf("Rotation: %f\n", rotation);
     printf("X0: (%f, %f)\n", origin(0), origin(1));
     printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
+    
+    printf("\nConstants:\n");
+    printf("Total Time: %f\n", totalTime);
+    printf("dt: %f\n", dt);
+    printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
+    printf("Rotation: %f\n", rotation);
+    
+    for(size_t i = 0; i < objects.size(); i++) {
+        printf("\nObject %d\n", (int)i);
+        printf("Type: %s\n", objects[i].type.c_str());
+        printf("Number of particles: %d\n", (int)objects[i].particles.size());
+        printf("Particle Mass: %f\n", objects[i].particles[0].m);
+        printf("Lame Constants: %f, %f\n", objects[i].mp.lambda, objects[i].mp.mu);
+        printf("Center of Mass: (%f, %f)\n", objects[i].center(0), objects[i].center(1));
+        printf("Color: (%f, %f, %f)\n", objects[i].color(0), objects[i].color(1), objects[i].color(2));
+    }
 
 	// allocate grid values
     mass = new double[res[0]*res[1]];
@@ -254,10 +279,6 @@ World::World(std::string config) {
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
     //TODO: Check gradient
-    
-    #ifndef NDEBUG
-    angle = 0;
-    #endif
 }
 
 void World::init() {
@@ -594,14 +615,19 @@ void World::updateGradient() {
 	}
   }
     #ifndef NDEBUG
-    double diffNorm = 0;
-    angle += rotation*dt*(M_PI/2.0)/m;
-    Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
-    for(unsigned int i = 0; i < particles.size(); i++) {
-        Matrix2d diff = particles[i].gradient - rotM;
-        diffNorm += diff.norm();
+    debug << elapsedTime << " ";
+    for(size_t o = 0; o < objects.size(); o++) {
+        Object& obj = objects[o];
+        double diffNorm = 0;
+        double angle = rotation*elapsedTime*(M_PI/2.0)/obj.mp.mass;
+        Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
+        for(size_t i = 0; i < obj.particles.size(); i++) {
+            Matrix2d diff = obj.particles[i].gradientE - rotM;
+            diffNorm += diff.norm();
+        }
+        debug << diffNorm << " ";
     }
-    debug << elapsedTime << " " << diffNorm;
+    debug << "\n";
     #endif
 }
 
@@ -628,14 +654,6 @@ void World::gridToParticles() {
 	std::vector<Particle> &particles = objects[obj].particles;
 	MaterialProps &mp = objects[obj].mp;
     /// #pragma omp parallel for
-	Vector2d com(0.0,0.0);
-    for(size_t i = 0; i < particles.size(); i++) {
-	  com += particles[i].x;
-	}
-	com /= particles.size();
-    #ifndef NDEBUG
-    double normDiff = 0;
-    #endif
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
@@ -682,12 +700,6 @@ void World::gridToParticles() {
 
         //Update Positions
         p.x += dt * p.v;
-        #ifndef NDEBUG
-        p.x1 = p.gradient * p.x0;
-        Vector2d diff = p.x - p.x1;
-        normDiff += diff.norm();
-        /// p.x = p.x1;
-        #endif
         
         #ifndef NDEBUG
         if(p.x.hasNaN()) {
@@ -721,9 +733,6 @@ void World::gridToParticles() {
         }
 	}
   }
-    #ifndef NDEBUG
-    debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
-    #endif
 }
 
 
