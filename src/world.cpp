@@ -24,9 +24,9 @@ int count = 0;
 
 //TODO: Print out info from parsing the json.
 
-//Run with linear velocity. Should get no dampening.
 //Try changing the mass to object mass rather than particle mass
 //APIC transfers rather than FLIP/PIC
+//Update constructor with better multi object support
 
 World::World(std::string config) {
     stepNum = 0;
@@ -52,7 +52,7 @@ World::World(std::string config) {
 	dt = root.get("dt", 1.0/30.0).asDouble();
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
-    double lambda, mu;                      //Lame Constants for stress
+    double lambda=0, mu=0;                      //Lame Constants for stress
     double compression; //critical compression (sec. 5 of stomahkin)
     double stretch; //critical stretch (sec. 5 of stomahkin)
     double massPropDamp, alpha;
@@ -187,9 +187,6 @@ World::World(std::string config) {
     }
     
     origin(0) += h/2.0; origin(1) += h/2.0;
-    #ifndef NDEBUG
-    m = 0;
-    #endif
     
     if(objType == "square") {
         center = object + (Vector2d(size[0],size[1]) * 0.5);
@@ -202,9 +199,6 @@ World::World(std::string config) {
                 Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
                 Particle par(pos, Vector2d(0,0), col, pmass);
                 objects[0].particles.push_back(par);
-                #ifndef NDEBUG
-                m += pmass;
-                #endif
             }
         }
     }
@@ -257,11 +251,6 @@ World::World(std::string config) {
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
-    //TODO: Check gradient
-    
-    #ifndef NDEBUG
-    angle = 0;
-    #endif
 }
 
 void World::init() {
@@ -413,11 +402,9 @@ void World::particlesToGrid() {
                 
                 mass[j*res[1] + k] += w * p.m;
                 RowVector2d xgT = xg.transpose();
-                Matrix2d t1 = xg * xgT;
-                t1 = w * t1;
+                Matrix2d t1 = w * (xg * xgT);
                 Matrix2d t2 = xp * xpT;
                 D[i] = D[i] + (t1 - t2);
-                /// vel [j*res[1] + k] += w * p.m * p.v;
             }
         }
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
@@ -617,16 +604,6 @@ void World::updateGradient() {
         }
 	}
   }
-    /// #ifndef NDEBUG
-    /// double diffNorm = 0;
-    /// angle += rotation*dt*(M_PI/2.0)/m;
-    /// Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
-    /// for(unsigned int i = 0; i < particles.size(); i++) {
-        /// Matrix2d diff = particles[i].gradient - rotM;
-        /// diffNorm += diff.norm();
-    /// }
-    /// debug << elapsedTime << " " << diffNorm;
-    /// #endif
 }
 
 /******************************
@@ -657,9 +634,6 @@ void World::gridToParticles() {
 	  com += particles[i].x;
 	}
 	com /= particles.size();
-    #ifndef NDEBUG
-    double normDiff = 0;
-    #endif
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
@@ -708,11 +682,6 @@ void World::gridToParticles() {
 
         //Update Positions
         p.x += dt * p.v;
-        /// #ifndef NDEBUG
-        /// p.x1 = p.gradient * p.x0;
-        /// Vector2d diff = p.x - p.x1;
-        /// normDiff += diff.norm();
-        /// #endif
         
         #ifndef NDEBUG
         if(p.x.hasNaN()) {
@@ -746,9 +715,6 @@ void World::gridToParticles() {
         }
 	}
   }
-    /// #ifndef NDEBUG
-    /// debug << " " << normDiff << std::endl; //Add norm difference along with rotation difference
-    /// #endif
 }
 
 

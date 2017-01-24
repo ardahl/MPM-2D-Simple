@@ -11,10 +11,6 @@ class Force;
 
 class Particle {
 public:
-    #ifndef NDEBUG
-    Eigen::Vector2d interpPos;
-    Eigen::Vector2d x0, x1;
-    #endif
     //Temp
     Eigen::Matrix2d stress;
     Eigen::Matrix2d B;         //B matrix from APIC paper
@@ -27,11 +23,7 @@ public:
     double rho;         //density
     double vol;         //volume
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {
-          #ifndef NDEBUG
-          x0 = x;
-          #endif
-      }
+	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
     Particle() {}
 };
 
@@ -70,13 +62,6 @@ public:
     double rotation;
     bool rotationEnabled, gravityEnabled, plasticEnabled;
     Eigen::Vector2d center;
-
-    //Debugging stuff
-    #ifndef NDEBUG
-    Eigen::Vector2d *worldPos;
-    double angle;
-    double m;
-    #endif
 
     World(std::string config);
   ~World();

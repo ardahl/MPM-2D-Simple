@@ -126,15 +126,15 @@ void idle() {
     world->step();
     timeSinceLastFrame += world->dt;
     
-    if(frame % 30 == 0) {
-        std::ofstream gradOut("grad.txt", std::ios_base::app);
-        double norm = 0;
-        for(size_t i = 0; i < world->objects[0].particles.size(); i++) {
-            norm += world->objects[0].particles[i].gradientE.norm();
-        }
-        gradOut << norm << "\n";
-        gradOut.close();
-    }
+    /// if(frame % 30 == 0) {
+        /// std::ofstream gradOut("grad.txt", std::ios_base::app);
+        /// double norm = 0;
+        /// for(size_t i = 0; i < world->objects[0].particles.size(); i++) {
+            /// norm += world->objects[0].particles[i].gradientE.norm();
+        /// }
+        /// gradOut << norm << "\n";
+        /// gradOut.close();
+    /// }
     int totFrames = (int)(30.0*world->totalTime);
     if(frame == totFrames+1) {
         printf("\n");
