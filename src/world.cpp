@@ -14,7 +14,6 @@ using benlib::range;
 
 #ifndef NDEBUG
 std::ofstream debug;
-int count = 0;
 #endif
 
 //TODO: Check if forces to cells are what you should be getting 
