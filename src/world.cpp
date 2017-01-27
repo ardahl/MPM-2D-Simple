@@ -212,11 +212,14 @@ World::World(std::string config) {
                     obj.particles.push_back(par);
                 }
             }
-            if(obj.mp.mass < 0) {
+            if(obj.mp.mass > 0) {
                 double partMass = obj.mp.mass / obj.particles.size();
                 for(size_t i = 0; i < obj.particles.size(); i++) {
                     obj.particles[i].m = partMass;
                 }
+            }
+            else {
+                obj.mp.mass = obj.mp.pmass * obj.particles.size();
             }
         }
         if(obj.type == "circle") {
@@ -239,11 +242,14 @@ World::World(std::string config) {
                     }
                 }
             }
-            if(obj.mp.mass < 0) {
+            if(obj.mp.mass > 0) {
                 double partMass = obj.mp.mass / obj.particles.size();
                 for(size_t i = 0; i < obj.particles.size(); i++) {
                     obj.particles[i].m = partMass;
                 }
+            }
+            else {
+                obj.mp.mass = obj.mp.pmass * obj.particles.size();
             }
         }
     }
