@@ -31,7 +31,7 @@ struct MaterialProps {
     double lambda, mu;                  //Lame Constants for stress
     double compression;                 //critical compression (sec. 5 of stomahkin)
     double stretch;                     //critical stretch (sec. 5 of stomahkin)
-    double massPropDamp, mass, alpha;
+    double massPropDamp, mass, pmass, alpha;
 };
 
 struct Object {

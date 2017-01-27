@@ -138,7 +138,11 @@ World::World(std::string config) {
 		mp.alpha = objectsIn[i].get("alpha",alpha).asDouble();
 		mp.stretch = objectsIn[i].get("stretch", stretch).asDouble();
 		mp.compression = objectsIn[i].get("compression", stretch).asDouble();
-		mp.mass = objectsIn[i].get("mass", pmass).asDouble();
+        
+        mp.pmass = objectsIn[i].get("particleMass", pmass).asDouble();
+        mp.pmass = objectsIn[i].get("mass", mp.pmass).asDouble();
+        mp.mass = objectsIn[i].get("objectMass", -1.0).asDouble();
+        
         auto colorIn = objectsIn[i]["color"];
         if (colorIn.size() == 3) {
             objects[i].color = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
@@ -204,13 +208,15 @@ World::World(std::string config) {
                 for(int j = 0; j < obj.ores[1]; j++) {
                     Vector2d pos = obj.object + Vector2d(diffx*i, diffy*j);
                     Vector3d col = ((double)j/(obj.ores[1]-1))*obj.color;
-                    Particle par(pos, Vector2d(0,0), col, 1);
+                    Particle par(pos, Vector2d(0,0), col, obj.mp.pmass);
                     obj.particles.push_back(par);
                 }
             }
-            double partMass = obj.mp.mass / obj.particles.size();
-            for(size_t i = 0; i < obj.particles.size(); i++) {
-                obj.particles[i].m = partMass;
+            if(obj.mp.mass < 0) {
+                double partMass = obj.mp.mass / obj.particles.size();
+                for(size_t i = 0; i < obj.particles.size(); i++) {
+                    obj.particles[i].m = partMass;
+                }
             }
         }
         if(obj.type == "circle") {
@@ -228,14 +234,16 @@ World::World(std::string config) {
                     Vector3d col = ((double)j/(obj.ores[1]-1))*obj.color;
                     Vector2d ph = pos - obj.object;
                     if( ((ph(0)*ph(0))/(obj.size[0]*obj.size[0])) + ((ph(1)*ph(1))/(obj.size[1]*obj.size[1])) < 1+EPS) {
-                        Particle par(pos, Vector2d(0,0), col, 1);
+                        Particle par(pos, Vector2d(0,0), col, obj.mp.pmass);
                         obj.particles.push_back(par);
                     }
                 }
             }
-            double partMass = obj.mp.mass / obj.particles.size();
-            for(size_t i = 0; i < obj.particles.size(); i++) {
-                obj.particles[i].m = partMass;
+            if(obj.mp.mass < 0) {
+                double partMass = obj.mp.mass / obj.particles.size();
+                for(size_t i = 0; i < obj.particles.size(); i++) {
+                    obj.particles[i].m = partMass;
+                }
             }
         }
     }
