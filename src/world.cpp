@@ -603,6 +603,21 @@ void World::updateGradient() {
             p.gradientP = Matrix2d::Identity();
         }
 	}
+    #ifndef NDEBUG     
+    debug << elapsedTime << " ";     
+    for(size_t o = 0; o < objects.size(); o++) {         
+        Object& obj = objects[o];         
+        double diffNorm = 0;         
+        double angle = rotation*elapsedTime*(M_PI/2.0)/obj.mp.mass;         
+        Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();         
+        for(size_t i = 0; i < obj.particles.size(); i++) {             
+            Matrix2d diff = obj.particles[i].gradientE - rotM;             
+            diffNorm += diff.norm();         
+        }
+        debug << diffNorm << " ";     
+    }     
+    debug << "\n";     
+    #endif
   }
 }
 
