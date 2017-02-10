@@ -40,7 +40,6 @@ int main(int argc, char* argv[]) {
 	}
   }
 #else
-  printf("Making Circle\n");
   Vector2d center = object;
         //non-randomly make a circle
         //technically this is an ellipse because I'm using the same data as the

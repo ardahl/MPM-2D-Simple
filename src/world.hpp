@@ -20,22 +20,28 @@ public:
     double m;                  //mass
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
-    double rho;         //density
-    double vol;         //volume
+    double rho;                //density
+    double vol;                //volume
+    
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
 	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
     Particle() {}
 };
 
 struct MaterialProps {
-    double lambda, mu;                      //Lame Constants for stress
-    double compression; //critical compression (sec. 5 of stomahkin)
-    double stretch; //critical stretch (sec. 5 of stomahkin)
-  double massPropDamp, pmass, alpha;
+    double lambda, mu;                  //Lame Constants for stress
+    double compression;                 //critical compression (sec. 5 of stomahkin)
+    double stretch;                     //critical stretch (sec. 5 of stomahkin)
+    double massPropDamp, mass, pmass, alpha;
 };
 
 struct Object {
   MaterialProps mp;
+  Eigen::Vector3d color;
+  std::string type;
+  double size[2];
+  int ores[2];
+  Eigen::Vector2d object, center;
   std::vector<Particle> particles;
 };
   
@@ -64,10 +70,9 @@ public:
     Eigen::Vector2d center;
 
     World(std::string config);
-  ~World();
-     //Functions
+    ~World();
+    //Functions
     void init();                            //Do any configurations, also call Compute_Particle_Volumes_And_Densities
-  //std::vector<Particle> getParticles() { return particles; }
     //Perform a step of length dt
     void step();
     void particleVolumesDensities();        //Compute_Particle_Volumes_And_Densities
