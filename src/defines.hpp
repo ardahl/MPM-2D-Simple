@@ -9,15 +9,18 @@
 #ifndef DEFINES_HPP_
 #define DEFINES_HPP_
 
-//Uncomment this to remove debug file output
-/// Code for debugging should be put around a #ifndef NDEBUG guard. The define
-/// below should be commented if you want the debug output, and uncommented to
-/// remove debug output.
-/// #define NDEBUG
+#include <cmath>
 
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later
 /// in which case it will need to move. But for now it'll rest here.
 const double EPS = 1e-5;
+
+/// For the weight function, it is only close to 0 when 1<x<2. Solving that 
+/// for x when it equals the epsilon value gives -+2 +- 6^(1/3)*EPS^(1/3). 
+/// Substituting in pos/h - i for x and solving for i gives us the upper and
+/// lower bounds where anything past them is less than epsilon.  
+/// Cube root of 6 times cube root of our epsilon.
+const double BOUNDOFFSET = 1.81712059283 * cbrt(EPS);
 
 #endif

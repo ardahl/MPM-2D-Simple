@@ -16,16 +16,10 @@ using benlib::range;
 std::ofstream debug;
 #endif
 
-//TODO: Check if forces to cells are what you should be getting 
-//applying it to particles
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
 //TODO: Print out info from parsing the json.
-
-//Try changing the mass to object mass rather than particle mass
-//APIC transfers rather than FLIP/PIC
-//Update constructor with better multi object support
 
 World::World(std::string config) {
     stepNum = 0;
@@ -329,10 +323,10 @@ inline Vector2d gradweight(const Vector2d &offset, double h) {
 
 
 inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *ybounds) {
-    xbounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(0))) - 1);
-    xbounds[1] = std::min(res[0]-1, ((int)std::floor(2.0 + offset(0))) + 1);
-    ybounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(1))) - 1);
-    ybounds[1] = std::min(res[1]-1, ((int)std::floor(2.0 + offset(1))) + 1);
+    xbounds[0] = std::max(0, ((int)std::ceil(-2 + BOUNDOFFSET + offset(0))));
+    xbounds[1] = std::min(res[0]-1, ((int)std::floor(2 - BOUNDOFFSET + offset(0)))+1);
+    ybounds[0] = std::max(0, ((int)std::ceil(-2 + BOUNDOFFSET + offset(1))));
+    ybounds[1] = std::min(res[1]-1, ((int)std::floor(2 - BOUNDOFFSET + offset(1)))+1);
 }
 
 
@@ -693,9 +687,6 @@ void World::gridToParticles() {
     for(size_t i = 0; i < particles.size(); i++) {
 		Particle &p = particles[i];
 		//Update velocities
-        /// Vector2d pic = Vector2d::Zero();
-        /// Vector2d flip = p.v;
-        /// Vector2d tmpPic, tmpFlip;
         p.B = Matrix2d::Zero();
         Vector2d apic = Vector2d::Zero();
 		Vector2d offset = (p.x - origin) / h;
@@ -707,11 +698,7 @@ void World::gridToParticles() {
     			double w = w1*weight(offset(1) - k);
 				int index = j*res[1] + k;
                 Vector2d xg = origin + h*Vector2d(j, k);
-                /// tmpPic = w * velStar[index];
-                /// pic += tmpPic;
-
-                /// tmpFlip = w * (velStar[index] - vel[index]);
-                /// flip += tmpFlip;
+                
                 apic += w * velStar[index];
                 p.B += w * velStar[index] * (xg - p.x).transpose();
             }
@@ -723,7 +710,6 @@ void World::gridToParticles() {
             exit(0);
         }
         #endif
-		/// p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
         p.v = apic;
         //Mass proportional damping
         p.v *= mp.massPropDamp;
