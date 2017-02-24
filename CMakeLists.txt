@@ -5,14 +5,14 @@ project(MPM)
 # User Options
 ###
 # Options are Release, Debug
-set( CMAKE_BUILD_TYPE Debug )
+set( CMAKE_BUILD_TYPE Release )
 #Uncomment line below to still use O3 optimization with debugging
 set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wno-deprecated-declarations -O3 -g")
 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall" )
 
 #Source directory
 set( SRC "src")
-#mpm
+#mpm graphics
 option(MPM_GRAPHICS "Compile the frame-grabbing mpm viewer" ON)
 #mpm_sim
 option(MPM_SIM "Compile the simulation that just dumps data to file for later viewing" ON)
@@ -58,7 +58,10 @@ include_directories(${GLUT_INCLUDE_DIRS})
 link_directories(${GLUT_LIBRARY_DIRS})
 add_definitions(${GLUT_DEFINITIONS})
 if(NOT GLUT_FOUND)
-    message(ERROR " GLUT not found!")
+    #message(ERROR " GLUT not found!")
+    message(STATUS "GLUT not found! Turning off mpm_graphics and viewer")
+    set(MPM_GRAPHICS OFF)
+    set(MPM_VIEW OFF)
 endif(NOT GLUT_FOUND)
 
 find_package(OpenGL REQUIRED)
@@ -66,14 +69,20 @@ include_directories(${OpenGL_INCLUDE_DIRS})
 link_directories(${OpenGL_LIBRARY_DIRS})
 add_definitions(${OpenGL_DEFINITIONS})
 if(NOT OPENGL_FOUND)
-    message(ERROR " OpenGL not found!")
+    #message(ERROR " OpenGL not found!")
+    message(STATUS "OpenGL not found! Turning off mpm_graphics and viewer")
+    set(MPM_GRAPHICS OFF)
+    set(MPM_VIEW OFF)
 endif(NOT OPENGL_FOUND)
 
 #OpenCV
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 if(NOT OpenCV_FOUND)
-    message(ERROR " OpenCV not found!")
+    #message(ERROR " OpenCV not found!")
+    message(STATUS "OpenCV not found! Turning off mpm_graphics and viewer")
+    set(MPM_GRAPHICS OFF)
+    set(MPM_VIEW OFF)
 endif(NOT OpenCV_FOUND)
 
 ###

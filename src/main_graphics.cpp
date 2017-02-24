@@ -56,7 +56,8 @@ void display() {
     //int iters = 4000;
     //double itersInv = 1.0/iters;
 
-    printf("\n");
+    /// printf("Frame %d/%d\n", frame, (int)(30.0*world->totalTime));
+    printf("                             \r");//clear out terminal line
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_BLEND);
@@ -119,7 +120,6 @@ void display() {
     output << flipped;
     
     glutSwapBuffers();
-    /// printf("Frame %d/%d\n", curr, seconds);
 }
 
 void idle() {
@@ -128,7 +128,7 @@ void idle() {
     
     int totFrames = (int)(30.0*world->totalTime);
     if(frame == totFrames+1) {
-        printf("\n");
+        printf("\n\n");
         #ifndef NDEBUG
         debug.close();
         #endif
