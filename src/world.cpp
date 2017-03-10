@@ -445,6 +445,7 @@ void World::particlesToGrid() {
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
     
+    #ifndef NAPIC
     {auto timer2 = prof.timeName("ptg Object Loop");
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
@@ -523,6 +524,45 @@ void World::particlesToGrid() {
             #endif
         }
 	}}
+    #else
+    for (unsigned int obj = 0; obj<objects.size(); obj++) {
+        std::vector<Particle> &particles = objects[obj].particles;
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    double w = w1*weight(offset(1) - k);
+                    mass[j*res[1] + k] += w * p.m;
+                    vel [j*res[1] + k] += w * p.m * p.v;
+                }
+            }
+        }
+	}
+    /// #pragma omp parallel for collapse(2)
+	double tmass = 0.0;
+	for(int i = 0; i < res[0]; i++) {
+		for(int j = 0; j < res[1]; j++) {
+		  tmass += mass[i*res[1]+j];
+            if(mass[i*res[1] + j] < EPS) {
+                vel[i*res[1] + j] = Vector2d(0.0, 0.0);
+            }
+            else {
+                vel[i*res[1] + j] /= mass[i*res[1] + j];
+            }
+            #ifndef NDEBUG
+            if(vel[i*res[1] + j].hasNaN()) {
+                printf("interpolated vel NaN at (%d, %d)\n", i, j);
+                std::cout << vel[i*res[1] + j] << std::endl;
+                exit(0);
+            }
+            #endif
+		}
+	}
+    #endif
 }
 
 /******************************
@@ -743,33 +783,67 @@ void World::gridToParticles() {
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             //Update velocities
-            p.B = Matrix2d::Zero();
-            Vector2d apic = Vector2d::Zero();
-            Vector2d offset = (p.x - origin) / h;
-            int xbounds[2], ybounds[2];
-            bounds(offset, res, xbounds, ybounds);
-            {auto timer = prof.timeName("gtp Bound Loop"); 
-            for(int j = xbounds[0]; j < xbounds[1]; j++) {
-                double w1 = weight(offset(0) - j);
-                for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                    double w = w1*weight(offset(1) - k);
-                    int index = j*res[1] + k;
-                    Vector2d xg = origin + h*Vector2d(j, k);
-                    
-                    Vector2d wvel = w * velStar[index];
-                    apic += wvel;
-                    p.B += wvel * (xg - p.x).transpose();
+            #ifndef NAPIC
+                p.B = Matrix2d::Zero();
+                Vector2d apic = Vector2d::Zero();
+                Vector2d offset = (p.x - origin) / h;
+                int xbounds[2], ybounds[2];
+                bounds(offset, res, xbounds, ybounds);
+                {auto timer = prof.timeName("gtp Bound Loop"); 
+                for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                    double w1 = weight(offset(0) - j);
+                    for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                        double w = w1*weight(offset(1) - k);
+                        int index = j*res[1] + k;
+                        Vector2d xg = origin + h*Vector2d(j, k);
+                        
+                        Vector2d wvel = w * velStar[index];
+                        apic += wvel;
+                        p.B += wvel * (xg - p.x).transpose();
+                    }
+                }}
+                {auto timer = prof.timeName("gtp Vel and Position Update"); 
+                #ifndef NDEBUG
+                if(apic.hasNaN()) {
+                    printf("\n\nAPIC Vel has NaN\n");
+                    std::cout << apic << std::endl;
+                    exit(0);
                 }
-            }}
-            {auto timer = prof.timeName("gtp Vel and Position Update"); 
-            #ifndef NDEBUG
-            if(apic.hasNaN()) {
-                printf("\n\nAPIC Vel has NaN\n");
-                std::cout << apic << std::endl;
-                exit(0);
-            }
+                #endif
+                p.v = apic;
+            #else
+                Vector2d pic = Vector2d::Zero();
+                Vector2d flip = p.v;
+                Vector2d tmpPic, tmpFlip;
+                Vector2d offset = (p.x - origin) / h;
+                int xbounds[2], ybounds[2];
+                bounds(offset, res, xbounds, ybounds);
+                for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                    double w1 = weight(offset(0) - j);
+                    for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                        double w = w1*weight(offset(1) - k);
+                        int index = j*res[1] + k;
+                        tmpPic = w * velStar[index];
+                        pic += tmpPic;
+
+                        tmpFlip = w * (velStar[index] - vel[index]);
+                        flip += tmpFlip;
+                    }
+                }
+                #ifndef NDEBUG
+                if(pic.hasNaN()) {
+                    printf("\n\nPIC Vel has NaN\n");
+                    std::cout << pic << std::endl;
+                    exit(0);
+                }
+                if(flip.hasNaN()) {
+                    printf("FLIP Vel has NaN\n");
+                    std::cout << flip << std::endl;
+                    exit(0);
+                }
+                #endif
+                p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
             #endif
-            p.v = apic;
             //Mass proportional damping
             p.v *= mp.massPropDamp;
             
