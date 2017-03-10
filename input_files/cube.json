@@ -6,7 +6,7 @@
 			"location" : [0.0, 1.5],
 			"size" : [1.0, 1.0],
 			"resolution" : [101, 101],
-			"type" : "circle"
+			"type" : "square"
 		}
 	],
 	"grid" : {

@@ -56,7 +56,8 @@ void display() {
     //int iters = 4000;
     //double itersInv = 1.0/iters;
 
-    printf("\n");
+    /// printf("Frame %d/%d\n", frame, (int)(30.0*world->totalTime));
+    printf("                             \r");//clear out terminal line
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_BLEND);
@@ -119,28 +120,19 @@ void display() {
     output << flipped;
     
     glutSwapBuffers();
-    /// printf("Frame %d/%d\n", curr, seconds);
 }
 
 void idle() {
     world->step();
     timeSinceLastFrame += world->dt;
     
-    if(frame % 30 == 0) {
-        std::ofstream gradOut("grad.txt", std::ios_base::app);
-        double norm = 0;
-        for(size_t i = 0; i < world->objects[0].particles.size(); i++) {
-            norm += world->objects[0].particles[i].gradientE.norm();
-        }
-        gradOut << norm << "\n";
-        gradOut.close();
-    }
     int totFrames = (int)(30.0*world->totalTime);
     if(frame == totFrames+1) {
-        printf("\n");
+        printf("\n\n");
         #ifndef NDEBUG
         debug.close();
         #endif
+        delete world;
         std::exit(0);
     }
 	printf("Frame %d/%d Step: %d/%d\r", frame, (int)(30.0*world->totalTime), iters, (int)(1.0/(30.0*world->dt)));

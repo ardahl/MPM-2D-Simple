@@ -16,12 +16,22 @@ using benlib::range;
 std::ofstream debug;
 #endif
 
-//TODO: Check if forces to cells are what you should be getting 
-//applying it to particles
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
 //TODO: Print out info from parsing the json.
+
+//APIC transfer of reference coordinates. Update the particle reference coordinates
+//Apic for eulerian solids with elasto-plastic model
+
+//calc.cs.umbc.edu. Nothing in home directory.
+//ssh to cal[0-12].cs.umbc.edu and access to data
+
+//1. Get working APIC working
+
+//TODO: Figure out what we can cache for speedup
+
+//TODO: Print D[i] to check form
 
 World::World(std::string config) {
     stepNum = 0;
@@ -45,9 +55,9 @@ World::World(std::string config) {
 	dt = root.get("dt", 1.0/30.0).asDouble();
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
-    double lambda=1, mu=1;                      //Lame Constants for stress
-    double compression;                     //critical compression (sec. 5 of stomahkin)
-    double stretch;                         //critical stretch (sec. 5 of stomahkin)
+    double lambda=0, mu=0;                      //Lame Constants for stress
+    double compression; //critical compression (sec. 5 of stomahkin)
+    double stretch; //critical stretch (sec. 5 of stomahkin)
     double massPropDamp, alpha;
 	// read global material properties, these may be overridden per object
     auto lameIn = root["lame"];
@@ -197,6 +207,7 @@ World::World(std::string config) {
     
     origin(0) += h/2.0; origin(1) += h/2.0;
     
+
     for(size_t o = 0; o < objects.size(); o++) {
         Object& obj = objects[o];
         if(obj.type == "square") {
@@ -285,13 +296,13 @@ World::World(std::string config) {
         printf("Center of Mass: (%f, %f)\n", objects[i].center(0), objects[i].center(1));
         printf("Color: (%f, %f, %f)\n", objects[i].color(0), objects[i].color(1), objects[i].color(2));
     }
+    printf("\n");
 
 	// allocate grid values
     mass = new double[res[0]*res[1]];
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
-    //TODO: Check gradient
 }
 
 void World::init() {
@@ -300,20 +311,23 @@ void World::init() {
 
 inline double weight(double x) {
     double ax = std::abs(x);
+    double x2 = x*x;
+    double ax3 = ax*ax*ax;
     if(ax < 1.0) {
-        return 0.5*ax*ax*ax - x*x + (2.0/3.0);
+        return 0.5*ax3 - x2 + (2.0/3.0);
     } else if(ax < 2.0) {
-        return (-1.0/6.0)*ax*ax*ax + x*x - 2.0*ax + (4.0/3.0);
+        return (-1.0/6.0)*ax3 + x2 - 2.0*ax + (4.0/3.0);
     }
     return 0;
 }
 
 inline double gradweight1d(double x) {
     double ax = std::abs(x);
+    double xax = x*ax;
     if(ax < 1.0) {
-        return 1.5*x*ax - 2.0*x;
+        return 1.5*xax - 2.0*x;
     } else if(ax < 2.0) {
-        return (-0.5)*x*ax + 2.0*x - 2.0*(x/ax);
+        return (-0.5)*xax + 2.0*x - 2.0*(x/ax);
     }
     return 0;
 }
@@ -323,12 +337,17 @@ inline Vector2d gradweight(const Vector2d &offset, double h) {
                     weight(offset(0))*gradweight1d(offset(1))/h);
 }
 
-
+//Keep the max and min? It should never reach past the ends since we're 
+//putting an invisible wall around the last 2 cells in gridToParticles
 inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *ybounds) {
-    xbounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(0))) - 1);
-    xbounds[1] = std::min(res[0]-1, ((int)std::floor(2.0 + offset(0))) + 1);
-    ybounds[0] = std::max(0, ((int)std::ceil(-2.0 + offset(1))) - 1);
-    ybounds[1] = std::min(res[1]-1, ((int)std::floor(2.0 + offset(1))) + 1);
+    /// xbounds[0] = std::max(0, ((int)std::ceil(BOUNDLOWER + offset(0))));
+    /// xbounds[1] = std::min(res[0]-1, ((int)std::floor(BOUNDUPPER + offset(0)))+1);
+    /// ybounds[0] = std::max(0, ((int)std::ceil(BOUNDLOWER + offset(1))));
+    /// ybounds[1] = std::min(res[1]-1, ((int)std::floor(BOUNDUPPER + offset(1)))+1);
+    xbounds[0] = ((int)(BOUNDLOWER + offset(0)))+1;
+    xbounds[1] = ((int)(BOUNDUPPER + offset(0)))+1;
+    ybounds[0] = ((int)(BOUNDLOWER + offset(1)))+1;
+    ybounds[1] = ((int)(BOUNDUPPER + offset(1)))+1;
 }
 
 
@@ -358,7 +377,9 @@ void World::particleVolumesDensities() {
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
             double w1 = weight(offset(0) - j);
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                double r = mass[j*res[1] + k] * w1 * weight(offset(1) - k);
+                int index = j*res[1] + k;
+                double w = w1 * weight(offset(1) - k);
+                double r = mass[index] * w;
                 p.rho += r;
             }
         }
@@ -420,47 +441,88 @@ void World::step() {
  *
  *****************************/
 void World::particlesToGrid() {
-  auto timer = prof.timeName("particlesToGrid");
+    auto timer = prof.timeName("particlesToGrid");
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
-
+    
+    {auto timer2 = prof.timeName("ptg Object Loop");
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
-	  std::vector<Particle> &particles = objects[obj].particles;
-	  for(size_t i = 0; i < particles.size(); i++) {
-		Particle &p = particles[i];
-		Vector2d offset = (p.x - origin) / h;
-		int xbounds[2], ybounds[2];
-		bounds(offset, res, xbounds, ybounds);
-        for(int j = xbounds[0]; j < xbounds[1]; j++) {
-   		    double w1 = weight(offset(0) - j);
-            for(int k = ybounds[0]; k < ybounds[1]; k++) {
-    			double w = w1*weight(offset(1) - k);
-                mass[j*res[1] + k] += w * p.m;
-                vel [j*res[1] + k] += w * p.m * p.v;
-            }
-        }
-	  }
-	}
+        std::vector<Particle> &particles = objects[obj].particles;
+        Matrix2d D[particles.size()];
+        {auto timer3 = prof.timeName("ptg Particles Loop");
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            D[i] = Matrix2d::Zero();
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            Vector2d xp = p.x;                                      //particle position
+            /// RowVector2d xpT = xp.transpose();  
+            /// Matrix2d t2 = xp * xpT;
+            {auto timer4 = prof.timeName("ptg Bounded Loop 1");                     
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    int index = j*res[1] + k;
+                    double w = w1*weight(offset(1) - k);
+                    Vector2d xg = origin + h*Vector2d(j, k);        //grid position
+                    /// RowVector2d xgT = xg.transpose();
+                
+                    mass[index] += w * p.m;
+                    /// Matrix2d t1 = w * (xg * xgT);
+                    /// D[i] = D[i] + (t1 - t2);
+                    RowVector2d gpT = (xg-xp).transpose();
+                    D[i] = D[i] + (w*(xg - xp)*gpT);
+                }
+            }}
+            #ifndef NDEBUG
+            /// debug << "Particle " << i << ":\n" << D[i] << "\n";
+            debug << "Particle " << i << ":\n";
+            #endif
+            {auto timer5 = prof.timeName("ptg Bounded Loop 2"); 
+            Matrix2d Dinv = D[i].inverse();   
+            Vector2d mv = p.m*p.v;
+            Matrix2d mBD = p.m*p.B*Dinv;
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    double w = w1*weight(offset(1) - k);
+                    Vector2d xg = origin + h*Vector2d(j, k);
+                
+                    vel[j*res[1] + k] += w * (mv + mBD*(xg-xp));
+                    #ifndef NDEBUG
+                    debug << j << ", " << k << "\n";
+                    debug << w*Dinv*(xg-xp) << "\n";
+                    debug << gradweight(Vector2d(offset(0)-j,offset(1)-k), h) << "\n";
+                    #endif
+                }
+            }}
+        }}
+        #ifndef NDEBUG
+        debug << "\n";
+        std::exit(1);
+        #endif
+	}}
     /// #pragma omp parallel for collapse(2)
-	double tmass = 0.0;
+    {auto timer6 = prof.timeName("ptg Vel Loop"); 
 	for(int i = 0; i < res[0]; i++) {
 		for(int j = 0; j < res[1]; j++) {
-		  tmass += mass[i*res[1]+j];
-            if(mass[i*res[1] + j] < EPS) {
-                vel[i*res[1] + j] = Vector2d(0.0, 0.0);
+            int index = i*res[1]+j;
+            if(mass[index] < EPS) {
+                vel[index] = Vector2d(0.0, 0.0);
             }
             else {
-                vel[i*res[1] + j] /= mass[i*res[1] + j];
+                vel[index] /= mass[index];
             }
             #ifndef NDEBUG
-            if(vel[i*res[1] + j].hasNaN()) {
+            if(vel[index].hasNaN()) {
                 printf("interpolated vel NaN at (%d, %d)\n", i, j);
-                std::cout << vel[i*res[1] + j] << std::endl;
+                std::cout << vel[index] << std::endl;
                 exit(0);
             }
             #endif
-		}
-	}
+        }
+	}}
 }
 
 /******************************
@@ -478,41 +540,46 @@ void World::particlesToGrid() {
  *      end for
  *****************************/
 void World::computeGridForces() {
-  auto timer = prof.timeName("computeGridForces");
+    auto timer = prof.timeName("computeGridForces");
     {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
-	for (unsigned int obj = 0; obj<objects.size(); obj++) {
-	  std::vector<Particle> &particles = objects[obj].particles;
-	  MaterialProps &mp = objects[obj].mp;
-	  for(size_t i = 0; i < particles.size(); i++) {
-        Particle &p = particles[i];
-        Matrix2d gradient = p.gradientE*p.gradientP; 
-        double J = gradient.determinant();
-        Matrix2d eps = 0.5 * (gradient.transpose() * gradient - Matrix2d::Identity());
-        double trace = eps.trace();
-        Matrix2d stress = mp.lambda*trace*Matrix2d::Identity() + 2.0*mp.mu*eps;
+	
+    {auto timer2 = prof.timeName("cgf Object Loop"); 
+    for (unsigned int obj = 0; obj<objects.size(); obj++) {
+        std::vector<Particle> &particles = objects[obj].particles;
+        MaterialProps &mp = objects[obj].mp;
+        {auto timer = prof.timeName("cgf Particles Loop"); 
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            Matrix2d gradient = p.gradientE*p.gradientP; 
+            double J = gradient.determinant();
+            Matrix2d eps = 0.5 * (gradient.transpose() * gradient - Matrix2d::Identity());
+            double trace = eps.trace();
+            Matrix2d stress = mp.lambda*trace*Matrix2d::Identity() + 2.0*mp.mu*eps;
+            Matrix2d Ftmp = p.vol * J * stress;
 
-		Vector2d offset = (p.x - origin) / h;
-		int xbounds[2], ybounds[2];
-		bounds(offset, res, xbounds, ybounds);
-        for(int j = xbounds[0]; j < xbounds[1]; j++) {
-            for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                Vector2d accumF = p.vol * J * stress * gradweight(Vector2d(offset(0)-j,offset(1)-k),h);
-                frc[j*res[1] + k] -= accumF;
-                #ifndef NDEBUG
-                if(frc[j*res[1] + k].hasNaN()) {
-                    printf("\nf NaN at (%d, %d)\n", j, k);
-                    std::cout << "Force:\n" << frc[j*res[1] + k] << std::endl;
-                    std::cout << "Volume: " << p.vol << std::endl;
-                    std::cout << "Determinant: " << gradient.determinant() << std::endl;
-                    std::cout << "Stress:\n" << p.stress << std::endl;
-                    std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-j, offset(1)-k),h) << std::endl;
-                    exit(0);
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            {auto timer = prof.timeName("cgf Bound Loop"); 
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    Vector2d accumF = Ftmp * gradweight(Vector2d(offset(0)-j,offset(1)-k),h);
+                    frc[j*res[1] + k] -= accumF;
+                    #ifndef NDEBUG
+                    if(frc[j*res[1] + k].hasNaN()) {
+                        printf("\nf NaN at (%d, %d)\n", j, k);
+                        std::cout << "Force:\n" << frc[j*res[1] + k] << std::endl;
+                        std::cout << "Volume: " << p.vol << std::endl;
+                        std::cout << "Determinant: " << gradient.determinant() << std::endl;
+                        std::cout << "Stress:\n" << p.stress << std::endl;
+                        std::cout << "Gradient:\n" << gradweight(Vector2d(offset(0)-j, offset(1)-k),h) << std::endl;
+                        exit(0);
+                    }
+                    #endif
                 }
-                #endif
-            }
-        }
-	  }
-	}
+            }}
+        }}
+	}}
 }
 
 /******************************
@@ -522,7 +589,7 @@ void World::computeGridForces() {
  *      end for
  *****************************/
 void World::updateGridVelocities() {
-  auto timer = prof.timeName("updateGridVelocities");
+    auto timer = prof.timeName("updateGridVelocities");
     /// #pragma omp parallel for collapse(2)
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
@@ -531,23 +598,23 @@ void World::updateGridVelocities() {
                 velStar[index] = Vector2d(0, 0);
             }
             else {
-			    Vector2d extfrc(0.0,0.0);
-				if(gravityEnabled) {
+                Vector2d extfrc(0.0,0.0);
+                if(gravityEnabled) {
                     extfrc += mass[index]*gravity;
-				}
-				if(rotationEnabled) {
+                }
+                if(rotationEnabled) {
                     Vector2d d = origin+Vector2d(h*i,h*j)-center;
                     extfrc += mass[index]*rotation*Vector2d(-d(1), d(0));
-				}
+                }
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
             }
             #ifndef NDEBUG
-		    if(velStar[i*res[1] + j].hasNaN()) {
+            if(velStar[index].hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
                 std::cout << velStar[index] << std::endl;
                 exit(0);
             }
-            #endif
+            #endif            
         }
     }
 }
@@ -564,84 +631,89 @@ void World::updateGridVelocities() {
  *      end for
  *****************************/
 void World::updateGradient() {
-  auto timer = prof.timeName("updateGradient");
-  for (unsigned int obj=0; obj<objects.size(); obj++) {
-	std::vector<Particle> &particles = objects[obj].particles;
-	MaterialProps &mp = objects[obj].mp;
+    auto timer = prof.timeName("updateGradient");
+    for (unsigned int obj=0; obj<objects.size(); obj++) {
+        std::vector<Particle> &particles = objects[obj].particles;
+        MaterialProps &mp = objects[obj].mp;
 
-    /// #pragma omp parallel for 
-    for(size_t i = 0; i < particles.size(); i++) {
-	    Particle &p = particles[i];
-        Matrix2d gradV = Matrix2d::Zero();
-		Vector2d offset = (p.x - origin) / h;
-		int xbounds[2], ybounds[2];
-		bounds(offset, res, xbounds, ybounds);
-        for(int j = xbounds[0]; j < xbounds[1]; j++) {
-            for(int k = ybounds[0]; k < ybounds[1]; k++) {
-			    int index = j*res[1]+k;
-                #ifndef NDEBUG
-                if(velStar[index].hasNaN()) {
-                    printf("gradV velStar has NaN at (%d, %d)\n", j, k);
-                    std::cout << velStar[index] << std::endl;
-                    exit(0);
+        /// #pragma omp parallel for 
+        {auto timer = prof.timeName("ug Particles Loop"); 
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            Matrix2d gradV = Matrix2d::Zero();
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            {auto timer = prof.timeName("ug Bound Loop"); 
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    int index = j*res[1]+k;
+                    #ifndef NDEBUG
+                    if(velStar[index].hasNaN()) {
+                        printf("gradV velStar has NaN at (%d, %d)\n", j, k);
+                        std::cout << velStar[index] << std::endl;
+                        exit(0);
+                    }
+                    if(gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose().hasNaN()) {
+                        printf("gradV gradW has NaN at (%d, %d)\n", j, k);
+                        std::cout << gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose() << std::endl;
+                        exit(0);
+                    }
+                    #endif
+                    Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose();
+                    gradV += accumGrad;
                 }
-                if(gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose().hasNaN()) {
-                    printf("gradV gradW has NaN at (%d, %d)\n", j, k);
-                    std::cout << gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose() << std::endl;
-                    exit(0);
-                }
-                #endif
-                Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose();
-                gradV += accumGrad;
+            }}
+            #ifndef NDEBUG
+            if(gradV.hasNaN()) {
+                printf("gradV has NaN\n");
+                std::cout << gradV << std::endl;
+                exit(0);
             }
-        }
-        #ifndef NDEBUG
-        if(gradV.hasNaN()) {
-            printf("gradV has NaN\n");
-            std::cout << gradV << std::endl;
-            exit(0);
-        }
-        #endif
-        Matrix2d fp = Matrix2d::Identity() + dt*gradV;
-        
-        Matrix2d tempGradE = fp*p.gradientE;
-        
-        if (plasticEnabled){
-            Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
+            #endif
+            {auto timer = prof.timeName("ug Grad Update"); 
+            Matrix2d fp = Matrix2d::Identity() + dt*gradV;
             
-            JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
+            Matrix2d tempGradE = fp*p.gradientE;
             
-            Matrix2d svdU = svd.matrixU();
-            Vector2d svdSV = svd.singularValues();
-            Matrix2d svdV = svd.matrixV();
-            
-            Vector2d sVClamped;
-            sVClamped << clamp(svdSV(0), 1-mp.compression, 1+mp.stretch), clamp(svdSV(1), 1-mp.compression, 1+mp.stretch);
-            Matrix2d svdClamped = sVClamped.asDiagonal();
-            
-            p.gradientE = svdU * svdClamped * svdV.transpose();
-            p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
-        } else {
-            p.gradientE = tempGradE;
-            p.gradientP = Matrix2d::Identity();
-        }
-	}
-  }
-    #ifndef NDEBUG
-    debug << elapsedTime << " ";
-    for(size_t o = 0; o < objects.size(); o++) {
-        Object& obj = objects[o];
-        double diffNorm = 0;
-        double angle = rotation*elapsedTime*(M_PI/2.0)/obj.mp.mass;
-        Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();
-        for(size_t i = 0; i < obj.particles.size(); i++) {
-            Matrix2d diff = obj.particles[i].gradientE - rotM;
-            diffNorm += diff.norm();
-        }
-        debug << diffNorm << " ";
+            if (plasticEnabled){
+                Matrix2d tempGrad = fp*p.gradientE*p.gradientP;
+                
+                JacobiSVD<Matrix2d> svd(tempGradE, ComputeFullU | ComputeFullV);
+                
+                Matrix2d svdU = svd.matrixU();
+                Vector2d svdSV = svd.singularValues();
+                Matrix2d svdV = svd.matrixV();
+                
+                Vector2d sVClamped;
+                sVClamped << clamp(svdSV(0), 1-mp.compression, 1+mp.stretch), clamp(svdSV(1), 1-mp.compression, 1+mp.stretch);
+                Matrix2d svdClamped = sVClamped.asDiagonal();
+                
+                p.gradientE = svdU * svdClamped * svdV.transpose();
+                p.gradientP = svdV * svdClamped.inverse() * svdU.transpose() * tempGrad;
+            } else {
+                p.gradientE = tempGradE;
+                p.gradientP = Matrix2d::Identity();
+            }
+            }
+        }}
+    
+        /// #ifndef NDEBUG     
+        /// debug << elapsedTime << " ";     
+        /// for(size_t o = 0; o < objects.size(); o++) {         
+            /// Object& obj = objects[o];         
+            /// double diffNorm = 0;         
+            /// double angle = rotation*elapsedTime*(M_PI/2.0)/obj.mp.mass;         
+            /// Matrix2d rotM = Rotation2Dd(angle).toRotationMatrix();         
+            /// for(size_t i = 0; i < obj.particles.size(); i++) {             
+                /// Matrix2d diff = obj.particles[i].gradientE - rotM;             
+                /// diffNorm += diff.norm();         
+            /// }
+            /// debug << diffNorm << " ";     
+        /// }     
+        /// debug << "\n";     
+        /// #endif
     }
-    debug << "\n";
-    #endif
 }
 
 /******************************
@@ -662,90 +734,89 @@ void World::updateGradient() {
  *      end for
  *****************************/
 void World::gridToParticles() {
-  auto timer = prof.timeName("gridToParticles");
-  for (unsigned int obj=0; obj<objects.size(); obj++) {
-	std::vector<Particle> &particles = objects[obj].particles;
-	MaterialProps &mp = objects[obj].mp;
-    /// #pragma omp parallel for
-    for(size_t i = 0; i < particles.size(); i++) {
-		Particle &p = particles[i];
-		//Update velocities
-        Vector2d pic = Vector2d::Zero();
-        Vector2d flip = p.v;
-        Vector2d tmpPic, tmpFlip;
-		Vector2d offset = (p.x - origin) / h;
-		int xbounds[2], ybounds[2];
-		bounds(offset, res, xbounds, ybounds);
-        for(int j = xbounds[0]; j < xbounds[1]; j++) {
-   		    double w1 = weight(offset(0) - j);
-            for(int k = ybounds[0]; k < ybounds[1]; k++) {
-    			double w = w1*weight(offset(1) - k);
-				int index = j*res[1] + k;
-                tmpPic = w * velStar[index];
-                pic += tmpPic;
-
-                tmpFlip = w * (velStar[index] - vel[index]);
-                flip += tmpFlip;
+    auto timer = prof.timeName("gridToParticles");
+    for (unsigned int obj=0; obj<objects.size(); obj++) {
+        std::vector<Particle> &particles = objects[obj].particles;
+        MaterialProps &mp = objects[obj].mp;
+        /// #pragma omp parallel for
+        {auto timer = prof.timeName("gtp Particles Loop"); 
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            //Update velocities
+            p.B = Matrix2d::Zero();
+            Vector2d apic = Vector2d::Zero();
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            {auto timer = prof.timeName("gtp Bound Loop"); 
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    double w = w1*weight(offset(1) - k);
+                    int index = j*res[1] + k;
+                    Vector2d xg = origin + h*Vector2d(j, k);
+                    
+                    Vector2d wvel = w * velStar[index];
+                    apic += wvel;
+                    p.B += wvel * (xg - p.x).transpose();
+                }
+            }}
+            {auto timer = prof.timeName("gtp Vel and Position Update"); 
+            #ifndef NDEBUG
+            if(apic.hasNaN()) {
+                printf("\n\nAPIC Vel has NaN\n");
+                std::cout << apic << std::endl;
+                exit(0);
             }
-        }
-        #ifndef NDEBUG
-        if(pic.hasNaN()) {
-            printf("\n\nPIC Vel has NaN\n");
-            std::cout << pic << std::endl;
-            exit(0);
-        }
-        if(flip.hasNaN()) {
-            printf("FLIP Vel has NaN\n");
-            std::cout << flip << std::endl;
-            exit(0);
-        }
-        #endif
-		p.v = (mp.alpha * flip) + ((1 - mp.alpha) * pic);
-        //Mass proportional damping
-        p.v *= mp.massPropDamp;
-        #ifndef NDEBUG
-        if(p.v.hasNaN()) {
-            printf("Vel has NaN\n");
-            std::cout << p.v << std::endl;
-            exit(0);
-        }
-        #endif
+            #endif
+            p.v = apic;
+            //Mass proportional damping
+            p.v *= mp.massPropDamp;
+            
+            #ifndef NDEBUG
+            if(p.v.hasNaN()) {
+                printf("Vel has NaN\n");
+                std::cout << p.v << std::endl;
+                exit(0);
+            }
+            #endif
 
-        //Update Positions
-        p.x += dt * p.v;
-        
-        #ifndef NDEBUG
-        if(p.x.hasNaN()) {
-            printf("Pos has NaN\n");
-            std::cout << p.x << std::endl;
-            exit(0);
-        }
-        #endif
-        //Boundary collisions
-        //Make sure there's a boundary of 2 cells for each side since the weighting
-        //function will touch 2 cells out
-        double lx = origin[0]+2*h;
-        double ly = origin[1]+2*h;
-        double ux = origin[0]+(res[0]-2)*h;
-        double uy = origin[1]+(res[1]-2)*h;
-        if(p.x(0) < lx) {
-            p.x(0) = lx+EPS;
-            p.v(0) *= -1;          //reverse velocity
-        }
-        if(p.x(1) < ly) {
-            p.x(1) = ly+EPS;
-            p.v(1) *= -1;
-        }
-        if(p.x(0) > ux) {
-            p.x(0) = ux-EPS;
-            p.v(0) *= -1;
-        }
-        if(p.x(1) > uy) {
-            p.x(1) = uy-EPS;
-            p.v(1) *= -1;
-        }
-	}
-  }
+            //Update Positions
+            p.x += dt * p.v;
+            
+            #ifndef NDEBUG
+            if(p.x.hasNaN()) {
+                printf("Pos has NaN\n");
+                std::cout << p.x << std::endl;
+                exit(0);
+            }
+            #endif
+            //Boundary collisions
+            //Make sure there's a boundary of 2 cells for each side since the weighting
+            //function will touch 2 cells out
+            double lx = origin[0]+2*h;
+            double ly = origin[1]+2*h;
+            double ux = origin[0]+(res[0]-2)*h;
+            double uy = origin[1]+(res[1]-2)*h;
+            if(p.x(0) < lx) {
+                p.x(0) = lx+EPS;
+                p.v(0) *= -1;          //reverse velocity
+            }
+            if(p.x(1) < ly) {
+                p.x(1) = ly+EPS;
+                p.v(1) *= -1;
+            }
+            if(p.x(0) > ux) {
+                p.x(0) = ux-EPS;
+                p.v(0) *= -1;
+            }
+            if(p.x(1) > uy) {
+                p.x(1) = uy-EPS;
+                p.v(1) *= -1;
+            }
+            }
+        }}
+    }
 }
 
 
@@ -836,69 +907,69 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	particles.resize(data->numParticles());
 
 	for (unsigned int i=0; i < particles.size(); i++) {
-	  Particle &p = particles[i];
-	  if (position) {
-		float *x = data->dataWrite<float>(xattr, i);
-		p.x[0] = x[0], p.x[1] = x[1];
-	  } else {
-		p.x = Vector2d(0.0, 0.0);
-	  }
-	  if (velocity) {
-		float *u = data->dataWrite<float>(uattr, i);
-		p.v[0] = u[0], p.v[1] = u[1];
-	  } else {
-		p.v = Vector2d(0.0, 0.0);
+        Particle &p = particles[i];
+        if (position) {
+            float *x = data->dataWrite<float>(xattr, i);
+            p.x[0] = x[0], p.x[1] = x[1];
+        } else {
+            p.x = Vector2d(0.0, 0.0);
+        }
+        if (velocity) {
+            float *u = data->dataWrite<float>(uattr, i);
+            p.v[0] = u[0], p.v[1] = u[1];
+        } else {
+            p.v = Vector2d(0.0, 0.0);
 		}
-	  if (stress) {
-		float *s = data->dataWrite<float>(sattr, i);
-		p.stress(0,0) = s[0], p.stress(0,1) = s[1], p.stress(1,0) = s[2], p.stress(1,1) = s[3];
-	  } else {
-		p.stress = Matrix2d::Zero();
-	  }
-	  if (gradientE) {
-		float *g = data->dataWrite<float>(geattr, i);
-		p.gradientE(0,0) = g[0], p.gradientE(0,1) = g[1], p.gradientE(1,0) = g[2], p.gradientE(1,1) = g[3];
-	  } else {
-		p.gradientE = Matrix2d::Identity();
-	  }
-	  if (gradientP) {
-		float *g = data->dataWrite<float>(gpattr, i);
-		p.gradientP(0,0) = g[0], p.gradientP(0,1) = g[1], p.gradientP(1,0) = g[2], p.gradientP(1,1) = g[3];
-	  } else {
-		p.gradientP = Matrix2d::Identity();
-	  }
-	  if (color) {
-		float *c = data->dataWrite<float>(cattr, i);
-		p.color(0) = c[0], p.color(1) = c[1], p.color(2) = c[2];
-	  } else {
-		p.color = Vector3d(1.0,1.0,1.0);
-	  }
-	  if (mass) {
-		float *m = data->dataWrite<float>(mattr, i);
-		p.m = m[0];
-	  } else {
-		p.m = 1.0;
-	  }
-	  if (rho) {
-		float *r = data->dataWrite<float>(rattr, i);
+        if (stress) {
+            float *s = data->dataWrite<float>(sattr, i);
+            p.stress(0,0) = s[0], p.stress(0,1) = s[1], p.stress(1,0) = s[2], p.stress(1,1) = s[3];
+        } else {
+            p.stress = Matrix2d::Zero();
+        }
+        if (gradientE) {
+            float *g = data->dataWrite<float>(geattr, i);
+            p.gradientE(0,0) = g[0], p.gradientE(0,1) = g[1], p.gradientE(1,0) = g[2], p.gradientE(1,1) = g[3];
+        } else {
+            p.gradientE = Matrix2d::Identity();
+        }
+        if (gradientP) {
+            float *g = data->dataWrite<float>(gpattr, i);
+            p.gradientP(0,0) = g[0], p.gradientP(0,1) = g[1], p.gradientP(1,0) = g[2], p.gradientP(1,1) = g[3];
+        } else {
+            p.gradientP = Matrix2d::Identity();
+        }
+        if (color) {
+            float *c = data->dataWrite<float>(cattr, i);
+            p.color(0) = c[0], p.color(1) = c[1], p.color(2) = c[2];
+        } else {
+            p.color = Vector3d(1.0,1.0,1.0);
+        }
+        if (mass) {
+            float *m = data->dataWrite<float>(mattr, i);
+            p.m = m[0];
+        } else {
+            p.m = 1.0;
+        }
+        if (rho) {
+            float *r = data->dataWrite<float>(rattr, i);
 			p.rho = r[0];
-	  } else {
-		p.rho = 1.0;
-	  }
-	  if (vol) {
-		float *v = data->dataWrite<float>(vattr, i);
-		p.vol = v[0];
-	  } else {
-		p.vol = 1.0;
-	  }
+        } else {
+            p.rho = 1.0;
+        }
+        if (vol) {
+            float *v = data->dataWrite<float>(vattr, i);
+            p.vol = v[0];
+        } else {
+            p.vol = 1.0;
+        }
 	}
 	return true;
 }
 
 World::~World() {
-  delete [] mass;
-  delete [] vel;
-  delete [] velStar;
-  delete [] frc;
-  prof.dump<std::chrono::duration<double>>(std::cout);
+    delete [] mass;
+    delete [] vel;
+    delete [] velStar;
+    delete [] frc;
+    prof.dump<std::chrono::duration<double>>(std::cout);
 } 

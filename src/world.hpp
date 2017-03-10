@@ -13,6 +13,7 @@ class Particle {
 public:
     //Temp
     Eigen::Matrix2d stress;
+    Eigen::Matrix2d B;         //B matrix from APIC paper
     
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
@@ -23,7 +24,7 @@ public:
     double vol;                //volume
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
     Particle() {}
 };
 
@@ -50,7 +51,7 @@ public:
     int stepNum;
     double elapsedTime, dt, totalTime;
     std::string filename;
-    Eigen::Vector2d origin;                 //lower left and upper right positions
+    Eigen::Vector2d origin;                 //lower left position
     int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
     //Structures used for calculations
@@ -80,6 +81,9 @@ public:
     void updateGridVelocities();            //Update_Grid_Velocities
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
+
+    //optimization stuff (not part of the actual algorithm)
+    //Mostly for testing purposes right now
 
   benlib::Profiler prof;
 };
