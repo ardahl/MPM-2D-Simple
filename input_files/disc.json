@@ -1,21 +1,22 @@
 {
 	"dt" : 0.0000333333333,
-	"totalTime" : 1,
+	//"dt" : 0.00000666666667,
+	"totalTime" : 2,
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/disc.bgeo"
+			"filename" : "parts/disc_slow.bgeo"
 		}
 	],
 	"grid" : {
 		"origin" : [-2.5, 0.0],
-		"size" : [50, 50],
-		"h" : 0.1
+		"size" : [100, 100],
+		"h" : 0.05
 	},
-	"mass" : 1.0,
+ 	"mass" : 1.0,
+	//"objectMass" : 10,	
 	"color" : [1.0, 0.0, 0.0],
-	"lame" : [1.0e3, 1.0e3],
-	//"lame" : [1.0e6, 1.0e6],
+	"lame" : [1.0e5, 1.0e5],
 	"massPropDamp" : 0.99999999,
 	"gravity" : [0.0, 0.0]
 }
