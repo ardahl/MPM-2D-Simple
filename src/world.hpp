@@ -82,6 +82,9 @@ public:
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
 
+    //optimization stuff (not part of the actual algorithm)
+    //Mostly for testing purposes right now
+
   benlib::Profiler prof;
 };
 

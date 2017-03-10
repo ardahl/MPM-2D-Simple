@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
   Vector2d object(0.0,1.5);
   int ores[2] = {101,101};
   double pmass = 1.0;
-  double rotation = 100.0;
+  double rotation = 0.3;
   
 #if 0
   Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);

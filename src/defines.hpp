@@ -22,5 +22,7 @@ const double EPS = 1e-5;
 /// lower bounds where anything past them is less than epsilon.  
 /// Cube root of 6 times cube root of our epsilon.
 const double BOUNDOFFSET = 1.81712059283 * cbrt(EPS);
+const double BOUNDLOWER = -2 + BOUNDOFFSET;
+const double BOUNDUPPER = 2 - BOUNDOFFSET;
 
 #endif
