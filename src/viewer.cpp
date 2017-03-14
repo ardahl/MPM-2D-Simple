@@ -32,6 +32,10 @@ void reshape(int w, int h) {
     glViewport(0, 0, width, height);
 }
 
+//TODO: Make this better. Currently requires being run in the directory of the files.
+//Also requires the configuration file to be there as well
+//First, remove world. We don't need to set up the world.
+//Second, Update this so we can run the viewer from anywhere
 bool readAnimation(const char *fname, std::vector<std::vector<std::vector<Particle> > > &frames) {
 	for (int frame = 0; true; frame++) {
 	  std::vector<std::vector<Particle> > objects;
@@ -41,6 +45,7 @@ bool readAnimation(const char *fname, std::vector<std::vector<std::vector<Partic
 		ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(5)<< frame;
 		std::string pframe(ss.str());
 		std::string parIn = std::string(fname) + "-" + pframe + ".bgeo";
+        if(!std::ifstream(parIn)) break;
 		if (!readParticles(parIn.c_str(), parts)) break;
 		if (parts.size() == 0) break;
 		objects.push_back(parts);
@@ -114,7 +119,6 @@ void display() {
     output << flipped;
     
     glutSwapBuffers();
-    /// printf("Frame %d/%d\n", curr, seconds);
 }
 
 void onKey(unsigned char key, int x, int y) {
@@ -153,20 +157,25 @@ int main(int argc, char *argv[]) {
     //set length of one complete row in destination data (doesn't need to equal img.cols)
     glPixelStorei(GL_PACK_ROW_LENGTH, img.step/img.elemSize());
 
-	std::string outfile;
-	if (argc < 3) {
-	  std::string inputfname = std::string(argv[1]);
-	  auto const start = inputfname.find_last_of('/');
-	  auto const end = inputfname.find_last_of('.');
-	  outfile = inputfname.substr(start+1,end-start-1);
-	} else {
-	  outfile = std::string(argv[2]);
-	}
+	std::string outfile, conffile;
+    if(argc == 1 || argc > 3) {
+        printf("Usage: ./viewer path/to/bgeo/<base_name> [/path/to/config]");
+        std::exit(0);
+    }
+    else if(argc == 2){
+        outfile = std::string(argv[1]);
+        conffile = outfile + std::string(".json");
+    }
+    else {
+        outfile = std::string(argv[1]);
+        conffile = std::string(argv[2]);
+    }
 
+    /// std::string videoout = outfile.substr(outfile.find_last_of('/')+1,std::string::npos) + std::string(".avi");
     std::string videoout = outfile + std::string(".avi");
     output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(width, height));
     
-    std::string config = std::string(argv[1]);	
+    std::string config = std::string(conffile);
     world = new World(config);
     world->init();
     

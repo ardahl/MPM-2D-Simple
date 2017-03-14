@@ -494,7 +494,7 @@ void World::particlesToGrid() {
         for(int i = 0; i < (int)particles.size(); i++) {
             Particle &p = particles[i];
             Matrix2d g = p.gradientE*p.gradientP;
-            //Decompose F = QR
+            //Decompose F = RS
         }
         debug << elapsedTime << " " << rotDet << "\n";
         #endif
