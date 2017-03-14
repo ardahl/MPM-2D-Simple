@@ -60,7 +60,6 @@ public:
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
 
     // particle object
-    //std::vector<Particle> particles;
     std::vector<Object> objects;
 
     // external forces

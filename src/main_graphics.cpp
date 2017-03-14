@@ -51,13 +51,12 @@ void display() {
 	timeSinceLastFrame = 0.0;
 	iters = 0;
 	frame++;
+    printf("                                             \r");//clear out terminal line
 
     //Perform step
     //int iters = 4000;
     //double itersInv = 1.0/iters;
 
-    /// printf("Frame %d/%d\n", frame, (int)(30.0*world->totalTime));
-    printf("                             \r");//clear out terminal line
     glClearColor(1,1,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_BLEND);

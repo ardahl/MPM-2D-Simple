@@ -19,19 +19,22 @@ std::ofstream debug;
 //Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
-//TODO: Print out info from parsing the json.
-
 //APIC transfer of reference coordinates. Update the particle reference coordinates
 //Apic for eulerian solids with elasto-plastic model
 
 //calc.cs.umbc.edu. Nothing in home directory.
-//ssh to cal[0-12].cs.umbc.edu and access to data
-
-//1. Get working APIC working
+//ssh to cal[01-12], has access to data
 
 //TODO: Figure out what we can cache for speedup
 
-//TODO: Print D[i] to check form
+//Steps:
+//x 1. Get APIC example working
+//2. Measure difference between gradients and rotations
+//3. APIC transfer of reference
+
+//Run simulation with lower values (maybe lamba=0)
+//Measure difference between F and pure rotation
+//Polar decomposition, Frobeneous norm of rotation
 
 World::World(std::string config) {
     stepNum = 0;
@@ -445,7 +448,7 @@ void World::particlesToGrid() {
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
     
-    #ifndef NAPIC
+#if 1
     {auto timer2 = prof.timeName("ptg Object Loop");
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
@@ -458,8 +461,6 @@ void World::particlesToGrid() {
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
             Vector2d xp = p.x;                                      //particle position
-            /// RowVector2d xpT = xp.transpose();  
-            /// Matrix2d t2 = xp * xpT;
             {auto timer4 = prof.timeName("ptg Bounded Loop 1");                     
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 double w1 = weight(offset(0) - j);
@@ -467,21 +468,14 @@ void World::particlesToGrid() {
                     int index = j*res[1] + k;
                     double w = w1*weight(offset(1) - k);
                     Vector2d xg = origin + h*Vector2d(j, k);        //grid position
-                    /// RowVector2d xgT = xg.transpose();
                 
                     mass[index] += w * p.m;
-                    /// Matrix2d t1 = w * (xg * xgT);
-                    /// D[i] = D[i] + (t1 - t2);
                     RowVector2d gpT = (xg-xp).transpose();
-                    D[i] = D[i] + (w*(xg - xp)*gpT);
+                    D[i] = D[i] + (w*(xg-xp)*gpT);
                 }
             }}
-            #ifndef NDEBUG
-            /// debug << "Particle " << i << ":\n" << D[i] << "\n";
-            debug << "Particle " << i << ":\n";
-            #endif
             {auto timer5 = prof.timeName("ptg Bounded Loop 2"); 
-            Matrix2d Dinv = D[i].inverse();   
+            Matrix2d Dinv = D[i].inverse();  
             Vector2d mv = p.m*p.v;
             Matrix2d mBD = p.m*p.B*Dinv;
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
@@ -491,17 +485,18 @@ void World::particlesToGrid() {
                     Vector2d xg = origin + h*Vector2d(j, k);
                 
                     vel[j*res[1] + k] += w * (mv + mBD*(xg-xp));
-                    #ifndef NDEBUG
-                    debug << j << ", " << k << "\n";
-                    debug << w*Dinv*(xg-xp) << "\n";
-                    debug << gradweight(Vector2d(offset(0)-j,offset(1)-k), h) << "\n";
-                    #endif
                 }
             }}
         }}
+        //TODO: Polar decomposition for rotation
         #ifndef NDEBUG
-        debug << "\n";
-        std::exit(1);
+        double rotDet = 0;
+        for(int i = 0; i < (int)particles.size(); i++) {
+            Particle &p = particles[i];
+            Matrix2d g = p.gradientE*p.gradientP;
+            //Decompose F = QR
+        }
+        debug << elapsedTime << " " << rotDet << "\n";
         #endif
 	}}
     /// #pragma omp parallel for collapse(2)
@@ -524,7 +519,7 @@ void World::particlesToGrid() {
             #endif
         }
 	}}
-    #else
+#else
     for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         for(size_t i = 0; i < particles.size(); i++) {
@@ -562,7 +557,7 @@ void World::particlesToGrid() {
             #endif
 		}
 	}
-    #endif
+#endif
 }
 
 /******************************

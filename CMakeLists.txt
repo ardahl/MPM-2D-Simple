@@ -29,6 +29,7 @@ option(SAMPLER "Simple template code for creating input particle files" ON)
 ###
 set( CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin )
 set( EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR} )
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")	#Adds the cmake directory for the FindEigen3.cmake file
 
 ######
 # For the simulation
@@ -44,8 +45,8 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-set(PARTIO_LIBRARY "partio -L/usr/local/lib")
-#set(PARTIO_LIBRARY "partio")
+#set(PARTIO_LIBRARY "partio -L/usr/local/lib")
+find_library(PARTIO_LIBRARY partio)
 #zlib library
 set(ZLIB "z")
 
@@ -53,30 +54,30 @@ set(ZLIB "z")
 # For the viewer
 ######
 #OpenGL and GLUT (Eventually make this optional)
-find_package(GLUT REQUIRED)
-include_directories(${GLUT_INCLUDE_DIRS})
-link_directories(${GLUT_LIBRARY_DIRS})
-add_definitions(${GLUT_DEFINITIONS})
+find_package(GLUT QUIET)
 if(NOT GLUT_FOUND)
-    #message(ERROR " GLUT not found!")
     message(STATUS "GLUT not found! Turning off mpm_graphics and viewer")
     set(MPM_GRAPHICS OFF)
     set(MPM_VIEW OFF)
+else(NOT GLUT_FOUND)
+    include_directories(${GLUT_INCLUDE_DIRS})
+    link_directories(${GLUT_LIBRARY_DIRS})
+    add_definitions(${GLUT_DEFINITIONS})
 endif(NOT GLUT_FOUND)
 
-find_package(OpenGL REQUIRED)
-include_directories(${OpenGL_INCLUDE_DIRS})
-link_directories(${OpenGL_LIBRARY_DIRS})
-add_definitions(${OpenGL_DEFINITIONS})
+find_package(OpenGL QUIET)
 if(NOT OPENGL_FOUND)
-    #message(ERROR " OpenGL not found!")
     message(STATUS "OpenGL not found! Turning off mpm_graphics and viewer")
     set(MPM_GRAPHICS OFF)
     set(MPM_VIEW OFF)
+else(NOT OPENGL_FOUND)
+    include_directories(${OpenGL_INCLUDE_DIRS})
+    link_directories(${OpenGL_LIBRARY_DIRS})
+    add_definitions(${OpenGL_DEFINITIONS})
 endif(NOT OPENGL_FOUND)
 
 #OpenCV
-find_package( OpenCV REQUIRED )
+find_package( OpenCV QUIET )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 if(NOT OpenCV_FOUND)
     #message(ERROR " OpenCV not found!")
@@ -89,7 +90,6 @@ endif(NOT OpenCV_FOUND)
 # Sources
 ###
 set (SOURCES
-	${SRC}/grid.cpp
 	${SRC}/world.cpp
 	${SRC}/jsoncpp.cpp
 )
@@ -99,24 +99,24 @@ add_library(mpmlib ${SOURCES})
 
 if(MPM_GRAPHICS)
     add_executable(mpm_graphics ${SRC}/main_graphics.cpp)
-    target_link_libraries(mpm_graphics ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
+    target_link_libraries(mpm_graphics mpmlib ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS})
 endif(MPM_GRAPHICS)
 
 #Standalone sim
 if(MPM_SIM)
     add_executable(mpm ${SRC}/main.cpp)
-    target_link_libraries(mpm ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
+    target_link_libraries(mpm mpmlib ${PARTIO_LIBRARY} ${ZLIB})
 endif(MPM_SIM)
 
 #Data viewer
 if(MPM_VIEW)
     add_executable(viewer ${SRC}/viewer.cpp)
-    target_link_libraries(viewer ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS} mpmlib)
+    target_link_libraries(viewer mpmlib ${PARTIO_LIBRARY} ${ZLIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${OpenCV_LIBS})
 endif(MPM_VIEW)
 
 #Simple Sampling Tool
 if(SAMPLER)
     add_executable(sampler ${SRC}/sampler.cpp)
-    target_link_libraries(sampler ${PARTIO_LIBRARY} ${ZLIB} mpmlib)
+    target_link_libraries(sampler mpmlib ${PARTIO_LIBRARY} ${ZLIB})
 endif(SAMPLER)
 

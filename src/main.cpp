@@ -51,7 +51,8 @@ int main(int argc, char** argv) {
 		  frame++;
 		  iters = 0;
 		  timeSinceLastFrame = world.dt;
-		  printf("\n");
+		  /// printf("\n");
+          printf("                                             \r");//clear out terminal line
 		}
 	  }
 	  
