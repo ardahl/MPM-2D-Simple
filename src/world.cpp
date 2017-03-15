@@ -8,6 +8,8 @@
 #include <Eigen/Geometry>
 #include "json/json.h"
 #include "range.hpp"
+//For matrix sqrt(), used for polar decomposition
+#include <unsupported/Eigen/MatrixFunctions>
 
 using namespace Eigen;
 using benlib::range;
@@ -493,9 +495,14 @@ void World::particlesToGrid() {
         double rotDet = 0;
         for(int i = 0; i < (int)particles.size(); i++) {
             Particle &p = particles[i];
-            Matrix2d g = p.gradientE*p.gradientP;
+            Matrix2d F = p.gradientE*p.gradientP;
+            Matrix2d FT = F.transpose();
             //Decompose F = RS
+            Matrix2d S = (FT*F).sqrt();
+            Matrix2d R = F*S.inverse();
+            rotDet += R.norm();
         }
+        rotDet /= particles.size();
         debug << elapsedTime << " " << rotDet << "\n";
         #endif
 	}}
