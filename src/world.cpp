@@ -447,7 +447,7 @@ void World::step() {
  *****************************/
 void World::particlesToGrid() {
     auto timer = prof.timeName("particlesToGrid");
-    {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}  
+    {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
     
 #if 1
@@ -982,7 +982,7 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 
 	particles.resize(data->numParticles());
 
-	for (unsigned int i=0; i < particles.size(); i++) {
+	for (int i=0; i < data->numParticles(); i++) {
         Particle &p = particles[i];
         if (position) {
             float *x = data->dataWrite<float>(xattr, i);

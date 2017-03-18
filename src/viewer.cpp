@@ -37,7 +37,7 @@ void reshape(int w, int h) {
 //First, remove world. We don't need to set up the world.
 //Second, Update this so we can run the viewer from anywhere
 bool readAnimation(const char *fname, std::vector<std::vector<std::vector<Particle> > > &frames) {
-	for (int frame = 0; true; frame++) {
+	for (int frame = 0; true; frame++) { 
 	  std::vector<std::vector<Particle> > objects;
 	  for (int obj = 0; true; obj++) {
    	    std::vector<Particle> parts;

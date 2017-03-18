@@ -5,10 +5,11 @@ project(MPM)
 # User Options
 ###
 # Options are Release, Debug
-set( CMAKE_BUILD_TYPE Debug )
+set( CMAKE_BUILD_TYPE Release )
 #Uncomment line below to still use O3 optimization with debugging
-set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wno-deprecated-declarations -O3 -g")
-set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall" )
+set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declarations" )
 
 #Source directory
 set( SRC "src")

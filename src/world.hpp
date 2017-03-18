@@ -17,14 +17,14 @@ public:
     
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
-    double m;                  //mass
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
+    double m;                  //mass
     double rho;                //density
     double vol;                //volume
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), m(m), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), rho(0), vol(0) {}
+	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0), vol(0) {}
     Particle() {}
 };
 
