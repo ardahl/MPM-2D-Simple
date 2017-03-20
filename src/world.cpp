@@ -1,6 +1,5 @@
 #include "world.hpp"
 #include <cstdio>
-#include <fstream>
 #include <iostream>
 #include <limits>
 #include <cmath>
@@ -18,7 +17,6 @@ using benlib::range;
 std::ofstream debug;
 #endif
 
-//Plot 2norm of (F-R)
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
 //APIC transfer of reference coordinates. Update the particle reference coordinates
@@ -29,14 +27,15 @@ std::ofstream debug;
 
 //TODO: Figure out what we can cache for speedup
 
+//Kinetic energy: .5*mv^2
+
 //Steps:
 //x 1. Get APIC example working
 //2. Measure difference between gradients and rotations
 //3. APIC transfer of reference
 
-//Run simulation with lower values (maybe lamba=0)
-//Measure difference between F and pure rotation
-//Polar decomposition, Frobeneous norm of rotation
+//Show gradient of the velocity field
+//Look at the matrices for the velocity gradient for select points (x=0, y=0 axis, etc)
 
 World::World(std::string config) {
     stepNum = 0;
@@ -297,6 +296,7 @@ World::World(std::string config) {
         printf("Type: %s\n", objects[i].type.c_str());
         printf("Number of particles: %d\n", (int)objects[i].particles.size());
         printf("Particle Mass: %f\n", objects[i].particles[0].m);
+        printf("Object Mass: %f\n", objects[i].mp.mass);
         printf("Lame Constants: %f, %f\n", objects[i].mp.lambda, objects[i].mp.mu);
         printf("Center of Mass: (%f, %f)\n", objects[i].center(0), objects[i].center(1));
         printf("Color: (%f, %f, %f)\n", objects[i].color(0), objects[i].color(1), objects[i].color(2));
@@ -308,6 +308,10 @@ World::World(std::string config) {
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
+    
+    polar.open("polar.txt");
+    kinetic.open("kinetic.txt");
+    inertia = 0.5 * objects[0].mp.mass; //Hard coding radius of 1 for tests
 }
 
 void World::init() {
@@ -491,20 +495,27 @@ void World::particlesToGrid() {
             }}
         }}
         //TODO: Polar decomposition for rotation
-        #ifndef NDEBUG
-        double rotDet = 0;
-        for(int i = 0; i < (int)particles.size(); i++) {
-            Particle &p = particles[i];
-            Matrix2d F = p.gradientE*p.gradientP;
-            Matrix2d FT = F.transpose();
-            //Decompose F = RS
-            Matrix2d S = (FT*F).sqrt();
-            Matrix2d R = F*S.inverse();
-            rotDet += R.norm();
+        if(stepNum%5000 == 0) {
+            double rotDet = 0;
+            double angle = elapsedTime*rotation*M_PI_2 / objects[obj].mp.mass;
+            angle = sin(angle);
+            double angVel = 0;
+            for(int i = 0; i < (int)particles.size(); i++) {
+                Particle &p = particles[i];
+                Matrix2d F = p.gradientE*p.gradientP;
+                Matrix2d FT = F.transpose();
+                //Decompose F = RS
+                Matrix2d S = (FT*F).sqrt();
+                /// Matrix2d R = F*S.inverse();
+                //Want to look at forbeneous norm of symmetric part. So don't need rotation
+                rotDet += (S-Matrix2d::Identity()).norm();
+                angVel += p.v.norm()*angle;
+            }
+            rotDet /= particles.size();
+            angVel /= particles.size();
+            polar << elapsedTime << " " << rotDet << "\n";
+            kinetic << elapsedTime << " " << 0.5*inertia*angVel*angVel << "\n";
         }
-        rotDet /= particles.size();
-        debug << elapsedTime << " " << rotDet << "\n";
-        #endif
 	}}
     /// #pragma omp parallel for collapse(2)
     {auto timer6 = prof.timeName("ptg Vel Loop"); 
@@ -682,6 +693,8 @@ void World::updateGradient() {
         {auto timer = prof.timeName("ug Particles Loop"); 
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
+            //TODO: Look at select matrices
+            //Maybe be anti-symmetric [r -1; 1 r] - I
             Matrix2d gradV = Matrix2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
@@ -785,7 +798,7 @@ void World::gridToParticles() {
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             //Update velocities
-            #ifndef NAPIC
+            #if 1
                 p.B = Matrix2d::Zero();
                 Vector2d apic = Vector2d::Zero();
                 Vector2d offset = (p.x - origin) / h;

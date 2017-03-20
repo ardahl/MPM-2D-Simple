@@ -5,6 +5,7 @@
 #include "defines.hpp"
 #include <vector>
 #include <algorithm>
+#include <fstream>
 #include "profiler.hpp"
 
 class Force;
@@ -83,6 +84,9 @@ public:
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now
+    std::ofstream polar;
+    std::ofstream kinetic;
+    double inertia;
 
   benlib::Profiler prof;
 };
