@@ -86,7 +86,7 @@ public:
     //Mostly for testing purposes right now
     std::ofstream polar;
     std::ofstream kinetic;
-    double inertia;
+    /// double inertia;
 
   benlib::Profiler prof;
 };

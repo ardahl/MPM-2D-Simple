@@ -237,7 +237,7 @@ World::World(std::string config) {
                 obj.mp.mass = obj.mp.pmass * obj.particles.size();
             }
         }
-        if(obj.type == "circle") {
+        else if(obj.type == "circle") {
             center = obj.object;
             //non-randomly make a circle
             //technically this is an ellipse because I'm using the same data as the
@@ -266,6 +266,10 @@ World::World(std::string config) {
             else {
                 obj.mp.mass = obj.mp.pmass * obj.particles.size();
             }
+        }
+        else {
+            obj.mp.pmass = obj.particles[0].m;
+            obj.mp.mass = obj.mp.pmass * obj.particles.size();
         }
     }
   
@@ -311,7 +315,7 @@ World::World(std::string config) {
     
     polar.open("polar.txt");
     kinetic.open("kinetic.txt");
-    inertia = 0.5 * objects[0].mp.mass; //Hard coding radius of 1 for tests
+    /// inertia = 0.5 * objects[0].mp.mass; //Hard coding radius of 1 for tests
 }
 
 void World::init() {
@@ -497,8 +501,8 @@ void World::particlesToGrid() {
         //TODO: Polar decomposition for rotation
         if(stepNum%5000 == 0) {
             double rotDet = 0;
-            double angle = elapsedTime*rotation*M_PI_2 / objects[obj].mp.mass;
-            angle = sin(angle);
+            /// double angle = elapsedTime*rotation*M_PI_2 / objects[obj].mp.mass;
+            /// angle = sin(angle);
             double angVel = 0;
             for(int i = 0; i < (int)particles.size(); i++) {
                 Particle &p = particles[i];
@@ -509,12 +513,13 @@ void World::particlesToGrid() {
                 /// Matrix2d R = F*S.inverse();
                 //Want to look at forbeneous norm of symmetric part. So don't need rotation
                 rotDet += (S-Matrix2d::Identity()).norm();
-                angVel += p.v.norm()*angle;
+                /// angVel += p.v.norm()*angle;
+                angVel += 0.5 * p.m * (p.v.squaredNorm());
             }
             rotDet /= particles.size();
             angVel /= particles.size();
             polar << elapsedTime << " " << rotDet << "\n";
-            kinetic << elapsedTime << " " << 0.5*inertia*angVel*angVel << "\n";
+            kinetic << elapsedTime << " " << angVel << "\n";
         }
 	}}
     /// #pragma omp parallel for collapse(2)
@@ -725,6 +730,7 @@ void World::updateGradient() {
                 std::cout << gradV << std::endl;
                 exit(0);
             }
+            debug << "Particle " << i << "\n" << gradV << "\n";
             #endif
             {auto timer = prof.timeName("ug Grad Update"); 
             Matrix2d fp = Matrix2d::Identity() + dt*gradV;
