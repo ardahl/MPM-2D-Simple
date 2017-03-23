@@ -11,6 +11,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declarations" )
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DINFO")
+
 #Source directory
 set( SRC "src")
 #mpm graphics

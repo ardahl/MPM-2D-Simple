@@ -84,9 +84,11 @@ public:
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now
+    #ifdef INFO
     std::ofstream polar;
     std::ofstream kinetic;
-    /// double inertia;
+    double inertia;
+    #endif
 
   benlib::Profiler prof;
 };
