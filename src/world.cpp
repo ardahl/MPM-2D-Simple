@@ -27,7 +27,10 @@ std::ofstream debug;
 
 //TODO: Figure out what we can cache for speedup
 
-//Kinetic energy: .5*mv^2
+//Fewer Particles. Make particles 6 random colors
+//20x20 grid cells, 5-8 particles per cell
+//Linear velocity field, make sure transfer is exact
+//Make it stiffer
 
 //Steps:
 //x 1. Get APIC example working
@@ -327,7 +330,7 @@ void World::init() {
 inline double weight(double x) {
     double ax = std::abs(x);
     double x2 = x*x;
-    double ax3 = ax*ax*ax;
+    double ax3 = x2*ax;
     if(ax < 1.0) {
         return 0.5*ax3 - x2 + (2.0/3.0);
     } else if(ax < 2.0) {
@@ -336,13 +339,19 @@ inline double weight(double x) {
     return 0;
 }
 
+inline double sign(double val) {
+    return (0.0 < val) - (val < 0.0);
+}
+
 inline double gradweight1d(double x) {
     double ax = std::abs(x);
     double xax = x*ax;
     if(ax < 1.0) {
         return 1.5*xax - 2.0*x;
     } else if(ax < 2.0) {
-        return (-0.5)*xax + 2.0*x - 2.0*(x/ax);
+        // x/ax is just the sign of x
+        /// return (-0.5)*xax + 2.0*x - 2.0*(x/ax);
+        return (-0.5)*xax + 2.0*x - 2*sign(x);
     }
     return 0;
 }
@@ -657,8 +666,6 @@ void World::updateGradient() {
         {auto timer = prof.timeName("ug Particles Loop"); 
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
-            //TODO: Look at select matrices
-            //Maybe be anti-symmetric [r -1; 1 r] - I
             Matrix2d gradV = Matrix2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
@@ -689,10 +696,6 @@ void World::updateGradient() {
                 std::cout << gradV << std::endl;
                 exit(0);
             }
-            /// if(i == 0 || i == particles.size()/2 || i == particles.size()-1 || i == particles.size()/2+2388 || i == particles.size()/2-2388
-                /// || i == particles.size()/2+45 || i == particles.size()/2-45 || i == particles.size()/2+25 || i == particles.size()/2-25) {
-                /// debug << "Particle " << i << ": (" << p.x(0) << ", " << p.x(1) << ")\n" << gradV << "\n\n";
-            /// }
             #endif
             {auto timer = prof.timeName("ug Grad Update"); 
             Matrix2d fp = Matrix2d::Identity() + dt*gradV;
