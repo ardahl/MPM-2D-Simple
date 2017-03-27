@@ -317,9 +317,8 @@ World::World(std::string config) {
     frc = new Vector2d[res[0]*res[1]];
     
     #ifdef INFO
-    polar.open("polar.txt");
-    kinetic.open("kinetic.txt");
-    inertia = 0.5 * objects[0].mp.mass; //Hard coding radius of 1 for tests
+    polar.open("/nfs/scratch/adahl1/disc/polar.txt");
+    kinetic.open("/nfs/scratch/adahl1/disc/kinetic.txt");
     #endif
 }
 
@@ -510,6 +509,11 @@ void World::particlesToGrid() {
         if(stepNum%5000 == 0) {
             double rotDet = 0;
             double angVel = 0;
+	    double inertia = 0, omega = 0;
+	    for(int i = 0; i < (int)particles.size(); i++) {
+		Particle &p = particles[i];
+		inertia += p.m * (p.x-objects[0].center).squaredNorm();
+	    }
             for(int i = 0; i < (int)particles.size(); i++) {
                 Particle &p = particles[i];
                 Matrix2d F = p.gradientE*p.gradientP;
@@ -519,11 +523,11 @@ void World::particlesToGrid() {
                 /// Matrix2d R = F*S.inverse();
                 //Want to look at forbeneous norm of symmetric part. So don't need rotation
                 rotDet += (S-Matrix2d::Identity()).norm();
-                double omegaSq = p.v.squaredNorm() / (objects[0].center-p.x).squaredNorm();
-                angVel += 0.5 * inertia * omegaSq;
+                omega += p.v.norm() / (objects[0].center-p.x).norm();
             }
             rotDet /= particles.size();
-            angVel /= particles.size();
+            omega /= particles.size();
+	    angVel = 0.5 * inertia * omega*omega;
             polar << elapsedTime << " " << rotDet << "\n";
             kinetic << elapsedTime << " " << angVel << "\n";
         }
