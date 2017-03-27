@@ -87,7 +87,6 @@ public:
     #ifdef INFO
     std::ofstream polar;
     std::ofstream kinetic;
-    double inertia;
     #endif
 
   benlib::Profiler prof;
