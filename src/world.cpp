@@ -25,17 +25,13 @@ std::ofstream debug;
 //calc.cs.umbc.edu. Nothing in home directory.
 //ssh to cal[01-12], has access to data
 
-//TODO: Figure out what we can cache for speedup
-
-//Fewer Particles. Make particles 6 random colors
-//20x20 grid cells, 5-8 particles per cell
-//Linear velocity field, make sure transfer is exact
-//Make it stiffer
+//TODO: Linear velocity field, make sure transfer is exact
 
 //Steps:
 //x 1. Get APIC example working
 //2. Measure difference between gradients and rotations
-//3. APIC transfer of reference
+//3. Get sparse disc to work
+//4. APIC transfer of reference
 
 //Show gradient of the velocity field
 //Look at the matrices for the velocity gradient for select points (x=0, y=0 axis, etc)
@@ -509,11 +505,11 @@ void World::particlesToGrid() {
         if(stepNum%5000 == 0) {
             double rotDet = 0;
             double angVel = 0;
-	    double inertia = 0, omega = 0;
-	    for(int i = 0; i < (int)particles.size(); i++) {
-		Particle &p = particles[i];
-		inertia += p.m * (p.x-objects[0].center).squaredNorm();
-	    }
+            double inertia = 0, omega = 0;
+            for(int i = 0; i < (int)particles.size(); i++) {
+                Particle &p = particles[i];
+                inertia += p.m * (p.x-objects[0].center).squaredNorm();
+            }
             for(int i = 0; i < (int)particles.size(); i++) {
                 Particle &p = particles[i];
                 Matrix2d F = p.gradientE*p.gradientP;
@@ -527,7 +523,7 @@ void World::particlesToGrid() {
             }
             rotDet /= particles.size();
             omega /= particles.size();
-	    angVel = 0.5 * inertia * omega*omega;
+            angVel = 0.5 * inertia * omega*omega;
             polar << elapsedTime << " " << rotDet << "\n";
             kinetic << elapsedTime << " " << angVel << "\n";
         }
@@ -883,7 +879,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		s[0] = p.stress(0,0), s[1] = p.stress(0,1), s[2] = p.stress(1,0), s[3] = p.stress(1,1);
 		ge[0] = p.gradientE(0,0), ge[1] = p.gradientE(0,1), ge[2] = p.gradientE(1,0), ge[3] = p.gradientE(1,1);
 		gp[0] = p.gradientP(0,0), gp[1] = p.gradientP(0,1), gp[2] = p.gradientP(1,0), gp[3] = p.gradientP(1,1);
-		c[0] = p.color(0), c[1] = p.color(1), s[2] = p.color(2);
+		c[0] = p.color(0), c[1] = p.color(1), c[2] = p.color(2);
 		m[0] = p.m;
 		r[0] = p.rho;
 		v[0] = p.vol;

@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   // parameters of the object
   double size[2] = {1.0, 1.0};
   Vector2d object(0.0,1.5);
-  int ores[2] = {51,51};
+  int ores[2] = {41,41};
   double pmass = 1.0;
   double rotation = 0.75;
   
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
       Vector3d col(1.0, 0.0, 0.0);
       Vector2d quad = pos - center;
       if((quad(0) < 0 && quad(1) < 0) || (quad(0) > 0 && quad(1) > 0)) {
-          col = Vector3d(0.0, 0.1, 0.0);
+          col = Vector3d(0.0, 1.0, 0.0);
       }
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {

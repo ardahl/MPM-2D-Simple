@@ -25,7 +25,7 @@ public:
     double vol;                //volume
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0), vol(0) {}
+	  stress(Eigen::Matrix2d::Identity()), B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
