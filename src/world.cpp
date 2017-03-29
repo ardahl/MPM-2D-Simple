@@ -779,6 +779,12 @@ void World::gridToParticles() {
             }
             #endif
             p.v = apic;
+            //Output velocity to check APIC transfer
+            #ifndef NDEBUG
+            if(i < 10) {
+                debug << i << ": (" << p.v(0) << ", " << p.v(1) << ")\n";
+            }
+            #endif
             //Mass proportional damping
             p.v *= mp.massPropDamp;
             
@@ -825,6 +831,9 @@ void World::gridToParticles() {
             }
             }
         }}
+        #ifndef NDEBUG
+        debug << "\n";
+        #endif
     }
 }
 
