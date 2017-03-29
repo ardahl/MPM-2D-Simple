@@ -59,8 +59,8 @@ int main(int argc, char* argv[]) {
       }
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-		/// Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
-        Vector2d vel(1.0, 0.0);
+		Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
+        /// Vector2d vel(1.0, 0.0);
 		Particle par(pos, vel, col, pmass);
 		parts.push_back(par);
 	  }
