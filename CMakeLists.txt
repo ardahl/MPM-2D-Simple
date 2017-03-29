@@ -15,6 +15,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declara
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DINFO")
 
+if(CMAKE_BUILD_TYPE MATCHES RELEASE)
+	message(STATUS "Building Release")
+else()
+	message(STATUS "Building Debug")
+endif()
+
 #Source directory
 set( SRC "src")
 #mpm graphics
