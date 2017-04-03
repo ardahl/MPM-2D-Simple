@@ -21,7 +21,8 @@ const double EPS = 1e-5;
 /// Substituting in pos/h - i for x and solving for i gives us the upper and
 /// lower bounds where anything past them is less than epsilon.  
 /// Cube root of 6 times cube root of our epsilon.
-const double BOUNDOFFSET = 1.81712059283 * cbrt(EPS);
+/// const double BOUNDOFFSET = 1.81712059283 * cbrt(EPS);
+const double BOUNDOFFSET = 0;
 const double BOUNDLOWER = -2 + BOUNDOFFSET;
 const double BOUNDUPPER = 2 - BOUNDOFFSET;
 

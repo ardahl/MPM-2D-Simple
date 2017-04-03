@@ -6,6 +6,7 @@ project(MPM)
 ###
 # Options are Release, Debug
 if( NOT CMAKE_BUILD_TYPE )
+	#Rather than modify this, just run './compile debug' in order to build with debugging
 	set( CMAKE_BUILD_TYPE Release )
 endif()
 #Uncomment line below to still use O3 optimization with debugging
@@ -15,11 +16,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declara
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DINFO")
 
-if(CMAKE_BUILD_TYPE MATCHES RELEASE)
-	message(STATUS "Building Release")
-else()
-	message(STATUS "Building Debug")
-endif()
+message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
 #Source directory
 set( SRC "src")

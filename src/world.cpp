@@ -28,13 +28,22 @@ std::ofstream debug;
 //TODO: Linear velocity field, make sure transfer is exact
 
 //Steps:
-//x 1. Get APIC example working
+//1. Are APIC transfers exact
 //2. Measure difference between gradients and rotations
 //3. Get sparse disc to work
 //4. APIC transfer of reference
 
-//Show gradient of the velocity field
-//Look at the matrices for the velocity gradient for select points (x=0, y=0 axis, etc)
+//APIC Transfers
+//Upping velocities, grid size see how error values scale 
+//Plot x and y difference for sign information
+//Lower epsilon
+//Check for getting zeros
+//Delete particles with small error and rerun with just the outer circle
+//Try different kernel and see what happens
+//Look at other degeneracies
+    //10 Particles
+    //particles in a line
+    //particles in a ring
 
 World::World(std::string config) {
     stepNum = 0;
@@ -320,6 +329,38 @@ World::World(std::string config) {
 
 void World::init() {
     particleVolumesDensities();
+    //Bootstrap on an APIC transfer to the grid and back
+    #ifndef NDEBUG
+    debug.precision(8);
+    for(int o = 0; o < (int)objects.size(); o++) {
+        for(int i = 0; i < (int)objects[o].particles.size(); i++) {
+            /// debug << i << ": (" << par[i].x(0) << ", " << par[i].x(1) << ")->(" << par[i].v(0) << ", " << par[i].v(1) << ")\n";
+            objects[o].particles[i].vold = objects[o].particles[i].v;
+        }
+        /// debug << "\n\n";
+        //Do an APIC transfer to grid
+        particlesToGrid();
+        //Check grid values for velocity (should be x,y)
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                int index = i*res[1]+j;
+                velStar[index] = vel[index];
+            }
+        }
+        //Do an APIC transfer from grid
+        gridToParticles();
+        //Check particle values (should still be x,y)
+        for(int i = 0; i < (int)objects[o].particles.size(); i++) {
+            /// debug << i << ": (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")->(" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
+            /// double diff = (objects[o].particles[i].v-objects[o].particles[i].vold).norm();
+            double diff = (objects[o].particles[i].v-objects[o].particles[i].x).norm();
+            debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
+            debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
+            debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff << "\n";
+        }
+    }
+    std::exit(0);
+    #endif
 }
 
 inline double weight(double x) {
@@ -779,12 +820,6 @@ void World::gridToParticles() {
             }
             #endif
             p.v = apic;
-            //Output velocity to check APIC transfer
-            #ifndef NDEBUG
-            if(i < 10) {
-                debug << i << ": (" << p.v(0) << ", " << p.v(1) << ")\n";
-            }
-            #endif
             //Mass proportional damping
             p.v *= mp.massPropDamp;
             
@@ -831,9 +866,6 @@ void World::gridToParticles() {
             }
             }
         }}
-        #ifndef NDEBUG
-        debug << "\n";
-        #endif
     }
 }
 

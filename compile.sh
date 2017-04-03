@@ -2,7 +2,7 @@
 #Check if argument 1 is debug or release, set appropriate build type
 if [ -z ${1+x} ]
 then
-    BUILD_TYPE=
+    BUILD_TYPE=-DCMAKE_BUILD_TYPE=Release
 elif [ ${1,,} == "debug" ]
 then
     BUILD_TYPE=-DCMAKE_BUILD_TYPE=Debug

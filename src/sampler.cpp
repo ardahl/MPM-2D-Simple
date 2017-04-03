@@ -16,9 +16,9 @@ int main(int argc, char* argv[]) {
   std::vector<Particle> parts;
 
   // parameters of the object
-  double size[2] = {1.0, 1.0};
-  Vector2d object(0.0,1.5);
-  int ores[2] = {80,80};
+  double size[2] = {0.5, 0.5};
+  Vector2d object(0.0,1.0);
+  int ores[2] = {45,45};
   double pmass = 1.0;
   double rotation = 0.75;
   
@@ -60,13 +60,19 @@ int main(int argc, char* argv[]) {
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
 		Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
-        /// Vector2d vel(1.0, 0.0);
-		Particle par(pos, vel, col, pmass);
+        /// Vector2d vel(pos(0), pos(1));
+        Particle par(pos, vel, col, pmass);
 		parts.push_back(par);
 	  }
 	}
   }
 #endif
+  if(ores[0] == 1 && ores[1] == 1) {
+      Vector2d vel = object;
+      Vector3d col(1.0, 0.0, 0.0);
+      Particle par(object, vel, col, pmass);
+      parts.push_back(par);
+  }
 
   writeParticles(argv[1], parts);
   return 0;

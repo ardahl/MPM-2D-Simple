@@ -23,6 +23,9 @@ public:
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
+    #ifndef NDEBUG
+    Eigen::Vector2d vold;
+    #endif
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
 	  stress(Eigen::Matrix2d::Identity()), B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
