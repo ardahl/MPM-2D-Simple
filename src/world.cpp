@@ -36,14 +36,24 @@ std::ofstream debug;
 //APIC Transfers
 //Lower epsilon
 //x1. Check for getting zeros
-//2. Upping velocities, grid size see how error values scale 
-//3. Plot x and y difference for sign information
+//x2. Upping velocities, grid size see how error values scale 
+//x3. Plot x and y difference for sign information
 //4. Try different kernel and see what happens
 //5. Look at other degeneracies
     //Delete particles with small error and rerun with just the outer circle
     //10 Particles
     //particles in a line
     //particles in a ring
+    
+//1. No particles put non-zero on grid and take off zero. The only 0's that show up
+//are when the distance is exactly 2
+//2. Error is linear with particle velocities. Increasing and decreasing the velocities
+//by 50% increased and decreased the error by ~50% respectively. Grid spacing is similar.
+//Particle spacing has minimal effect. More particles increases it slightly, but that 
+//is likely just because there are more particles in edge regions
+//3. For x, edge values on the left side of the object are higher than they should be
+//while the right side is lower than it should be. For y, values on the bottom are
+//lower than they should be and values on the top are greater.
 
 World::World(std::string config) {
     stepNum = 0;
@@ -331,6 +341,8 @@ void World::init() {
     particleVolumesDensities();
     //Bootstrap on an APIC transfer to the grid and back
     #ifndef NDEBUG
+    std::ofstream xdiff("xdiff.txt");
+    std::ofstream ydiff("ydiff.txt");
     debug.precision(8);
     for(int o = 0; o < (int)objects.size(); o++) {
         for(int i = 0; i < (int)objects[o].particles.size(); i++) {
@@ -351,14 +363,24 @@ void World::init() {
         gridToParticles();
         //Check particle values (should still be x,y)
         for(int i = 0; i < (int)objects[o].particles.size(); i++) {
-            /// debug << i << ": (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")->(" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
-            /// double diff = (objects[o].particles[i].v-objects[o].particles[i].vold).norm();
-            double diff = (objects[o].particles[i].v-objects[o].particles[i].x).norm();
+            Vector2d diff = objects[o].particles[i].v - objects[o].particles[i].vold;
+            double diffNorm = diff.norm();
+            /// double diff = (objects[o].particles[i].v-objects[o].particles[i].x).norm();
             /// debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
             /// debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
-            debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff << "\n";
+            debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diffNorm << "\n";
+            /// xdiff << i << " " << diff(0) << "\n";
+            /// ydiff << i << " " << diff(1) << "\n";
+            xdiff << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff(0) << "\n";
+            ydiff << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff(1) << "\n";
+            debug.flush();
+            xdiff.flush();
+            ydiff.flush();
         }
     }
+    debug.close();
+    xdiff.close();
+    ydiff.close();
     std::exit(0);
     #endif
 }
@@ -372,7 +394,6 @@ inline double weight(double x) {
     } else if(ax < 2.0) {
         return (-1.0/6.0)*ax3 + x2 - 2.0*ax + (4.0/3.0);
     }
-    printf("Zero Weight\n");
     return 0;
 }
 

@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   // parameters of the object
   double size[2] = {0.5, 0.5};
   Vector2d object(0.0,1.0);
-  int ores[2] = {45,45};
+  int ores[2] = {30,30};
   double pmass = 1.0;
   double rotation = 0.75;
   
@@ -59,9 +59,9 @@ int main(int argc, char* argv[]) {
       }
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-		Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
-        /// Vector2d vel(pos(0), pos(1));
-        Particle par(pos, vel, col, pmass);
+		/// Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
+        Vector2d vel(pos(0), pos(1));
+        Particle par(pos, 1.0*vel, col, pmass);
 		parts.push_back(par);
 	  }
 	}
