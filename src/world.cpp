@@ -34,13 +34,13 @@ std::ofstream debug;
 //4. APIC transfer of reference
 
 //APIC Transfers
-//Upping velocities, grid size see how error values scale 
-//Plot x and y difference for sign information
 //Lower epsilon
-//Check for getting zeros
-//Delete particles with small error and rerun with just the outer circle
-//Try different kernel and see what happens
-//Look at other degeneracies
+//x1. Check for getting zeros
+//2. Upping velocities, grid size see how error values scale 
+//3. Plot x and y difference for sign information
+//4. Try different kernel and see what happens
+//5. Look at other degeneracies
+    //Delete particles with small error and rerun with just the outer circle
     //10 Particles
     //particles in a line
     //particles in a ring
@@ -354,8 +354,8 @@ void World::init() {
             /// debug << i << ": (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")->(" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
             /// double diff = (objects[o].particles[i].v-objects[o].particles[i].vold).norm();
             double diff = (objects[o].particles[i].v-objects[o].particles[i].x).norm();
-            debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
-            debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
+            /// debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
+            /// debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
             debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff << "\n";
         }
     }
@@ -372,6 +372,7 @@ inline double weight(double x) {
     } else if(ax < 2.0) {
         return (-1.0/6.0)*ax3 + x2 - 2.0*ax + (4.0/3.0);
     }
+    printf("Zero Weight\n");
     return 0;
 }
 
@@ -404,10 +405,10 @@ inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *
     /// xbounds[1] = std::min(res[0]-1, ((int)std::floor(BOUNDUPPER + offset(0)))+1);
     /// ybounds[0] = std::max(0, ((int)std::ceil(BOUNDLOWER + offset(1))));
     /// ybounds[1] = std::min(res[1]-1, ((int)std::floor(BOUNDUPPER + offset(1)))+1);
-    xbounds[0] = ((int)(BOUNDLOWER + offset(0)))+1;
-    xbounds[1] = ((int)(BOUNDUPPER + offset(0)))+1;
-    ybounds[0] = ((int)(BOUNDLOWER + offset(1)))+1;
-    ybounds[1] = ((int)(BOUNDUPPER + offset(1)))+1;
+    xbounds[0] = ((int)(-2 + offset(0)))+1;
+    xbounds[1] = ((int)( 2 + offset(0)))+1;
+    ybounds[0] = ((int)(-2 + offset(1)))+1;
+    ybounds[1] = ((int)( 2 + offset(1)))+1;
 }
 
 
@@ -846,8 +847,8 @@ void World::gridToParticles() {
             //function will touch 2 cells out
             double lx = origin[0]+2*h;
             double ly = origin[1]+2*h;
-            double ux = origin[0]+(res[0]-2)*h;
-            double uy = origin[1]+(res[1]-2)*h;
+            double ux = origin[0]+(res[0]-3)*h; //The last index is res-1 so it's -3
+            double uy = origin[1]+(res[1]-3)*h; 
             if(p.x(0) < lx) {
                 p.x(0) = lx+EPS;
                 p.v(0) *= -1;          //reverse velocity
