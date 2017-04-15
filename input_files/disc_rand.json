@@ -1,0 +1,23 @@
+{
+	"dt" : 0.000000666666666666,
+	//"dt" : 0.0000008333333333,
+	"totalTime" : 1,
+	"objects" : [
+		{
+			"type" : "parts",
+			"filename" : "parts/random.bgeo"
+		}
+	],
+	"grid" : {
+		"origin" : [-1.0, 0.0],
+		//"size" : [40, 40],
+		//"h" : 0.05
+		"size" : [20, 20],
+		"h" : 0.1
+	},
+ 	"mass" : 1.0,
+	"lame" : [0, 1.0e6],
+	//"massPropDamp" : 0.99999999,
+	"massPropDamp" : 1.0,	
+	"gravity" : [0.0, 0.0]
+}

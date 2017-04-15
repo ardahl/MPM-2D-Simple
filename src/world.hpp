@@ -13,7 +13,6 @@ class Force;
 class Particle {
 public:
     //Temp
-    Eigen::Matrix2d stress;
     Eigen::Matrix2d B;         //B matrix from APIC paper
     
     Eigen::Vector2d x, v;      //postition, velocity
@@ -23,12 +22,12 @@ public:
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
-    #ifndef NDEBUG
+    #ifdef INFO
     Eigen::Vector2d vold;
     #endif
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  stress(Eigen::Matrix2d::Identity()), B(Eigen::Matrix2d::Identity()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
+	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
@@ -47,6 +46,7 @@ struct Object {
   int ores[2];
   Eigen::Vector2d object, center;
   std::vector<Particle> particles;
+  Eigen::Matrix2d *D;                   //B*Dinv is an approximation of gradV, so maybe store it for later
 };
   
 
