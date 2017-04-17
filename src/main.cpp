@@ -54,11 +54,12 @@ int main(int argc, char** argv) {
 		  std::string pframe(ss.str());
 		  std::string parOut = outfile + "-" + pframe + ".bgeo";
 		  writeParticles(parOut.c_str(), world.objects[obj].particles);
+          step++;
 		  /// frame++;
 		  /// iters = 0;
 		  /// timeSinceLastFrame = world.dt;
 		  /// printf("\n");
-          printf("                                             \r");//clear out terminal line
+          printf("                                                                 \r");//clear out terminal line
 		}
 	  }
       

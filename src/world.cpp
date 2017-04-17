@@ -772,7 +772,7 @@ void World::computeGridForces() {
             /// Matrix2d gradient = p.gradientE;
             double J = gradient.determinant();
             if(J < 0) {
-                printf("Negative Determinant: %d\n", J);
+                printf("Negative Determinant: %f\n", J);
                 std::cout << "Gradient:\n" << gradient << "\n";
                 exit(1);
             }
