@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   Vector2d object(0.0,0.5);
   int ores[2] = {50,50};
   double pmass = 1.0;
-  double rotation = 0.50;
+  double rotation = 0.75;
   int numPart = 648;
   
 #if SQUARE

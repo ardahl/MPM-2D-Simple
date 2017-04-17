@@ -42,7 +42,7 @@ bool readAnimation(const char *fname, std::vector<std::vector<std::vector<Partic
 	  for (int obj = 0; true; obj++) {
    	    std::vector<Particle> parts;
    	    std::ostringstream ss;
-		ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(5)<< frame;
+		ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< frame;
 		std::string pframe(ss.str());
 		std::string parIn = std::string(fname) + "-" + pframe + ".bgeo";
         if(!std::ifstream(parIn)) break;

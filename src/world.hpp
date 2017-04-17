@@ -24,6 +24,7 @@ public:
     double vol;                //volume
     #ifdef INFO
     Eigen::Vector2d vold;
+    Eigen::Vector2d xo;
     #endif
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 

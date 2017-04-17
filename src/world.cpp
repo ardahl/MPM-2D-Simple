@@ -21,7 +21,10 @@ std::ofstream debug;
 std::ofstream debug("debug.txt");
 std::ofstream xdiff("xdiff.txt");
 std::ofstream ydiff("ydiff.txt");
+double rot1 = 0;
+double rot2 = 0;
 #endif
+
 
 //Rotation = (speed*dt)/(mass of body) * pi/2
 
@@ -392,9 +395,7 @@ inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *
 }
 
 void World::init() {
-    #ifndef INFO
     particleVolumesDensities();
-    #endif
     //Bootstrap on an APIC transfer to the grid and back
     #ifdef INFO
     /// debug.precision(10);
@@ -406,6 +407,7 @@ void World::init() {
     for(int o = 0; o < (int)objects.size(); o++) {
         for(int i = 0; i < (int)objects[o].particles.size(); i++) {
             objects[o].particles[i].vold = objects[o].particles[i].v;
+            objects[o].particles[i].xo = objects[o].particles[i].x;
         }
         //Do an APIC transfer to grid
         particlesToGrid();
@@ -425,18 +427,18 @@ void World::init() {
             double diffNorm = diff.norm();
             /// debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
             /// debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
-            debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diffNorm << "\n";
+            /// debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diffNorm << "\n";
             xdiff << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff(0) << "\n";
             ydiff << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diff(1) << "\n";
-            debug.flush();
+            /// debug.flush();
             xdiff.flush();
             ydiff.flush();
         }
     }
-    debug.close();
+    /// debug.close();
     xdiff.close();
     ydiff.close();
-    std::exit(0);
+    /// std::exit(0);
     #endif
 }
 
@@ -509,6 +511,22 @@ void World::step() {
     gridToParticles();
     stepNum++;
 	elapsedTime += dt;
+    #ifdef INFO
+    if(stepNum % 50000 == 0) {
+        double ang = 0.75*elapsedTime*M_PI_2;
+        debug << "Frame " << stepNum / 50000 << " Angle: " << ang << ", ";
+        double err = 0;
+        Rotation2D<double> rad(ang);
+        Matrix2d rotM = rad.toRotationMatrix();
+        std::vector<Particle> &par = objects[0].particles;
+        for(int i = 0; i < par.size(); i++) {
+            Particle &p = par[i];
+            Vector2d xc = p.xo - objects[0].center;
+            err += ((rotM*xc+objects[0].center)-p.x).norm();
+        }
+        debug << err << "\n";
+    }
+    #endif
 }
 
 /******************************
@@ -753,6 +771,11 @@ void World::computeGridForces() {
             Matrix2d gradient = p.gradientE*p.gradientP; 
             /// Matrix2d gradient = p.gradientE;
             double J = gradient.determinant();
+            if(j < 0) {
+                printf("Negative Determinant: %d\n", J);
+                std::cout << "Gradient:\n" << gradient << "\n";
+                exit(1);
+            }
             Matrix2d gradT = gradient.transpose();
             Matrix2d eps = 0.5 * (gradT * gradient - Matrix2d::Identity());
             double trace = eps.trace();
