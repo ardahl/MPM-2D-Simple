@@ -303,6 +303,8 @@ World::World(std::string config) {
         Vector2d avePos = Vector2d::Zero();
         for(size_t j = 0; j < objects[i].particles.size(); j++) {
             avePos += objects[i].particles[j].x;
+            objects[i].particles[j].c1 = objects[i].particles[j].color;
+            objects[i].particles[j].c2 = Vector3d(0.0, 0.0, 1.0);
         }
         avePos /= objects[i].particles.size();
         objects[i].center = avePos;
@@ -563,7 +565,7 @@ void World::particlesToGrid() {
             Particle &p = particles[i];
             if(stepNum == 0) {
                 Matrix2d C;
-                C << 0, -0.75, 0.75, 0; //Rotational (rotation=0.75) Case
+                C << 0, -0.75, 0.75, 0; //Rotational (rotation=1.0) Case
                 /// C << 1, 0, 0, 1;    //Linear (x,y) Case
                 p.B = C * tmpD;
             }
@@ -772,9 +774,21 @@ void World::computeGridForces() {
             /// Matrix2d gradient = p.gradientE;
             double J = gradient.determinant();
             if(J < 0) {
-                printf("Negative Determinant: %f\n", J);
-                std::cout << "Gradient:\n" << gradient << "\n";
-                exit(1);
+                /// printf("Negative Determinant: %f\n", J);
+                /// std::cout << "Gradient:\n" << gradient << "\n";
+                /// #ifdef INFO
+                /// debug.close();
+                /// xdiff.close();
+                /// ydiff.close();
+                /// #endif
+                /// #ifndef NDEBUG
+                /// debug.close();
+                /// #endif
+                /// exit(1);
+                p.color = p.c2;
+            }
+            else {
+                p.color = p.c1;
             }
             Matrix2d gradT = gradient.transpose();
             Matrix2d eps = 0.5 * (gradT * gradient - Matrix2d::Identity());

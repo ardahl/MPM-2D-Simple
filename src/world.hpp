@@ -17,6 +17,7 @@ public:
     
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
+    Eigen::Vector3d c1, c2;
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
     double m;                  //mass
