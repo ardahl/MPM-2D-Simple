@@ -5,7 +5,7 @@
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/disc_2.bgeo"
+			"filename" : "parts/square_2.bgeo"
 		}
 	],
 	"grid" : {

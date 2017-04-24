@@ -11,7 +11,7 @@
 
 /// #define RAND
 
-#define CIRCLE 1 //could change to SQUARE, LINE
+#define SQUARE 1 //could change to SQUARE, LINE
 
 using namespace Eigen;
 using benlib::range;
@@ -24,23 +24,32 @@ int main(int argc, char* argv[]) {
   Vector2d object(0.0,0.5);
   int ores[2] = {50,50};
   double pmass = 1.0;
-  double rotation = 0.75;
+  double rotation = 0.333333333;
   int numPart = 648;
   
 #if SQUARE
-  Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);
+  //Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);
+  Vector2d center = object;
+  object = object - Vector2d(size[0], size[1]);
   //Set up particles at each object vertex
-  double diffx = size[0] / (ores[0]-1);
-  double diffy = size[1] / (ores[1]-1);
+  double diffx = 2*size[0] / (ores[0]-1);
+  double diffy = 2*size[1] / (ores[1]-1);
   for(int i = 0; i < ores[0]; i++) {
 	for(int j = 0; j < ores[1]; j++) {
 	  Vector2d pos = object + Vector2d(diffx*i, diffy*j);
-	  Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
+	  Vector2d quad = pos - center;
+	  Vector3d col(1.0, 0.0, 0.0);
+	  if((quad(0) < 0 && quad(1) < 0) || (quad(0) >= 0 && quad(1) >= 0)) {
+	    col = Vector3d(0.0, 1.0, 0.0);
+	  }
 
 	  Vector2d d = pos-center;
 	  Vector2d vel = rotation*Vector2d(-d(1), d(0));
 
-	  Particle par(pos, vel, col, pmass, 0.0, 0.0);
+	  Particle par(pos, vel, col, pmass);
+	  Matrix2d B;
+	  B << 0, -rotation, rotation, 0;
+	  par.B = B;
 	  parts.push_back(par);
 	}
   }

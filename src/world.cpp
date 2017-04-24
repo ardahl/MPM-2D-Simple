@@ -565,7 +565,7 @@ void World::particlesToGrid() {
             Particle &p = particles[i];
             if(stepNum == 0) {
                 Matrix2d C;
-                C << 0, -0.75, 0.75, 0; //Rotational (rotation=1.0) Case
+                C << 0, -0.33333333333, 0.3333333333, 0; //Rotational (rotation=1.0) Case
                 /// C << 1, 0, 0, 1;    //Linear (x,y) Case
                 p.B = C * tmpD;
             }
