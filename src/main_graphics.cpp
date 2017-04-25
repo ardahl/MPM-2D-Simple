@@ -181,8 +181,19 @@ int main(int argc, char** argv) {
     glPixelStorei(GL_PACK_ALIGNMENT, (img.step & 3) ? 1 : 4);
     //set length of one complete row in destination data (doesn't need to equal img.cols)
     glPixelStorei(GL_PACK_ROW_LENGTH, img.step/img.elemSize());
-    std::string videoout = outfile + std::string(".avi");
-    output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(width, height));
+    std::string videoout = outfile + std::string(".mp4");
+    //Old AVI format
+    /// output = cv::VideoWriter(videoout, CV_FOURCC('P', 'I', 'M', '1'), 30, cv::Size(width, height)); 
+    //Theoretically this should be the H.264 codec with mp4 files, but ffmpeg uses different tags.
+    //From docs: http://docs.opencv.org/3.2.0/dd/d9e/classcv_1_1VideoWriter.html#ac3478f6257454209fa99249cc03a5c59
+        //FFMPEG backend with MP4 container natively uses other values as fourcc code: see ObjectType, so you may receive a warning message from OpenCV about fourcc code conversion. 
+    /// output = cv::VideoWriter(videoout, CV_FOURCC('H', '2', '6', '4'), 30, cv::Size(width, height));
+    //0x20 is the code for the mp4v codec (MPEG-4 Video), CV_FOURCC gives a different tag
+    output = cv::VideoWriter(videoout, 0x20, 30, cv::Size(width, height));
+    if(!output.isOpened()) {
+        printf("Not Open\n");
+        std::exit(0);
+    }
     
     world = new World(config);
     world->init();

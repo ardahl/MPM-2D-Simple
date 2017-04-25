@@ -18,7 +18,9 @@ std::ofstream debug;
 #endif
 
 #ifdef INFO
-std::ofstream debug("debug.txt");
+/// std::ofstream debug("debug.txt");
+std::ofstream cond("cond.txt");
+std::ofstream cmat("c.txt");
 std::ofstream xdiff("xdiff.txt");
 std::ofstream ydiff("ydiff.txt");
 double rot1 = 0;
@@ -400,12 +402,6 @@ void World::init() {
     particleVolumesDensities();
     //Bootstrap on an APIC transfer to the grid and back
     #ifdef INFO
-    /// debug.precision(10);
-    /// debug.setf(std::ios::fixed, std::ios::floatfield);
-    /// xdiff.precision(10);
-    /// xdiff.setf(std::ios::fixed, std::ios::floatfield);
-    /// ydiff.precision(10);
-    /// ydiff.setf(std::ios::fixed, std::ios::floatfield);
     for(int o = 0; o < (int)objects.size(); o++) {
         for(int i = 0; i < (int)objects[o].particles.size(); i++) {
             objects[o].particles[i].vold = objects[o].particles[i].v;
@@ -426,7 +422,7 @@ void World::init() {
         //Check particle values (should still be x,y)
         for(int i = 0; i < (int)objects[o].particles.size(); i++) {
             Vector2d diff = objects[o].particles[i].v - objects[o].particles[i].vold;
-            double diffNorm = diff.norm();
+            /// double diffNorm = diff.norm();
             /// debug << "Old: (" << objects[o].particles[i].vold(0) << ", " << objects[o].particles[i].vold(1) << ")\n";
             /// debug << "New: (" << objects[o].particles[i].v(0) << ", " << objects[o].particles[i].v(1) << ")\n";
             /// debug << objects[o].particles[i].x(0) << " " << objects[o].particles[i].x(1) << " " << diffNorm << "\n";
@@ -511,24 +507,53 @@ void World::step() {
     updateGridVelocities();
     updateGradient();
     gridToParticles();
-    stepNum++;
-	elapsedTime += dt;
     #ifdef INFO
-    if(stepNum % 50000 == 0) {
-        double ang = 0.75*elapsedTime*M_PI_2;
-        debug << "Frame " << stepNum / 50000 << " Angle: " << ang << ", ";
-        double err = 0;
-        Rotation2D<double> rad(ang);
-        Matrix2d rotM = rad.toRotationMatrix();
-        std::vector<Particle> &par = objects[0].particles;
-        for(int i = 0; i < par.size(); i++) {
-            Particle &p = par[i];
-            Vector2d xc = p.xo - objects[0].center;
-            err += ((rotM*xc+objects[0].center)-p.x).norm();
+    if(stepNum % 200000 == 0) {
+        /// double ang = 0.75*elapsedTime*M_PI_2;
+        /// debug << "Frame " << stepNum / 50000 << " Angle: " << ang << ", ";
+        /// double err = 0;
+        /// Rotation2D<double> rad(ang);
+        /// Matrix2d rotM = rad.toRotationMatrix();
+        /// std::vector<Particle> &par = objects[0].particles;
+        /// for(int i = 0; i < par.size(); i++) {
+            /// Particle &p = par[i];
+            /// Vector2d xc = p.xo - objects[0].center;
+            /// err += ((rotM*xc+objects[0].center)-p.x).norm();
+        /// }
+        /// debug << err << "\n";
+        //Check if C is constant
+        Matrix2d C = objects[0].particles[0].B * objects[0].D[0];
+        cmat << "Frame " << stepNum / 200000 << "\nC[0]:\n" << C << "\n\n";
+        //Check condition number
+        //Loop through particles, find eigenvalues, divide larger by smaller
+        //Output worst
+        double maxCond = 0;
+        for(int i = 0; i < (int)objects[0].particles.size(); i++) {
+            Particle &p = objects[0].particles[i];
+            //Eigenvalues
+            EigenSolver<Matrix2d> es(p.gradientE*p.gradientP, false);
+            double e1 = es.eigenvalues().real()(0);
+            double e2 = es.eigenvalues().real()(1);
+            /// std::cout << es.eigenvalues() << "\n" << e1 << "\n" << e2 << "\n";
+            /// std::exit(0);
+            double cnum = 0;
+            if(e1 > e2) {
+                cnum = e1 / e2;
+            }
+            else {
+                cnum = e2 / e1;
+            }
+            if(cnum > maxCond) {
+                maxCond = cnum;
+            }
         }
-        debug << err << "\n";
+        cond << stepNum / 200000 << " " << maxCond << "\n";
+        cond.flush();
+        cmat.flush();
     }
     #endif
+    stepNum++;
+	elapsedTime += dt;
 }
 
 /******************************
@@ -565,11 +590,10 @@ void World::particlesToGrid() {
             Particle &p = particles[i];
             if(stepNum == 0) {
                 Matrix2d C;
-                C << 0, -0.33333333333, 0.3333333333, 0; //Rotational (rotation=1.0) Case
+                C << 0, -0.75, 0.75, 0; //Rotational (rotation=1.0) Case
                 /// C << 1, 0, 0, 1;    //Linear (x,y) Case
                 p.B = C * tmpD;
             }
-            /// Dtensor[i] = Matrix2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
@@ -589,15 +613,11 @@ void World::particlesToGrid() {
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
                     int index = j*res[1] + k;
                     double w = w1*weight(offset(1) - k);
-                    /// Vector2d xg = origin + h*Vector2d(j, k);        //grid position
                     mass[index] += w * p.m;
-                    /// RowVector2d gpT = (xg-xp).transpose();
-                    /// Dtensor[i] = Dtensor[i] + (w*(xg-xp)*gpT);
                     #ifndef NDEBUG
                     if(stepNum >= 50000*0 && stepNum < 50000*20 && stepNum%5000 == 0) {
                         if(i == 0) {
                             debug << "Adding to mass at (" << j << "," << k << "): " << w*p.m << "\n";
-                            /// debug << "Adding to D:\n" << w*(xg-xp)*gpT << "\n";
                         }
                     }
                     #endif
@@ -611,7 +631,6 @@ void World::particlesToGrid() {
                 }
             }
             #endif
-            /// Matrix2d Dinv = Dtensor[i].inverse();
             Matrix2d Dinv = tmpDinv;  
             Dtensor[i] = Dinv;
             Vector2d mv = p.m*p.v;
@@ -894,12 +913,11 @@ void World::updateGradient() {
     for (unsigned int obj=0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         MaterialProps &mp = objects[obj].mp;
-        Matrix2d *D = objects[obj].D;
+        /// Matrix2d *D = objects[obj].D;
 
         {auto timer = prof.timeName("ug Particles Loop"); 
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
-            /* Using C as gradV eliminates this entirely
             Matrix2d gradV = Matrix2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
@@ -948,11 +966,10 @@ void World::updateGradient() {
                 exit(0);
             }
             #endif
-            */
             {auto timer = prof.timeName("ug Grad Update"); 
-            Matrix2d C = p.B * D[i];
-            Matrix2d fp = Matrix2d::Identity() + dt*C;
-            /// Matrix2d fp = Matrix2d::Identity() + dt*gradV;
+            /// Matrix2d C = p.B * D[i];
+            /// Matrix2d fp = Matrix2d::Identity() + dt*C;
+            Matrix2d fp = Matrix2d::Identity() + dt*gradV;
             
             Matrix2d tempGradE = fp*p.gradientE;
             #ifndef NDEBUG

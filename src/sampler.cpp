@@ -4,14 +4,17 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <random>
+#include <ctime>
 #include <Partio.h>
 #include <Eigen/Geometry>
 #include "json/json.h"
 #include "range.hpp"
 
 /// #define RAND
+#define JITTER
 
-#define SQUARE 1 //could change to SQUARE, LINE
+#define CIRCLE true //could change to SQUARE, LINE
 
 using namespace Eigen;
 using benlib::range;
@@ -24,8 +27,9 @@ int main(int argc, char* argv[]) {
   Vector2d object(0.0,0.5);
   int ores[2] = {50,50};
   double pmass = 1.0;
-  double rotation = 0.333333333;
+  double rotation = 0.75;
   int numPart = 648;
+  std::srand(std::time(0));
   
 #if SQUARE
   //Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);
@@ -62,7 +66,7 @@ int main(int argc, char* argv[]) {
         //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
   double diffx = 2*size[0] / (ores[0]-1);
   double diffy = 2*size[1] / (ores[1]-1);
-#ifdef RAND
+#if RAND
   while(parts.size() < numPart) {
       Vector2d pos = Matrix<double, 2, 1>::Random();
       pos(0) = pos(0)*size[0];
@@ -72,6 +76,12 @@ int main(int argc, char* argv[]) {
   for(int i = 0; i < ores[0]; i++) {
 	for(int j = 0; j < ores[1]; j++) {
 	  Vector2d pos = center - Vector2d(size[0], size[1]) + Vector2d(diffx*i, diffy*j);
+#endif
+#ifdef JITTER
+      //Jitter position by quarter grid cell size
+      Vector2d jsize(0.00625, 0.00625);
+      /// Vector2d jsize(0.0125, 0.0125);
+      pos = pos + Vector2d(jsize(0)*(2*((double)rand()/RAND_MAX)-1), jsize(1)*(2*((double)rand()/RAND_MAX)-1));
 #endif
 	  /// Vector3d col = ((double)j/(ores[1]-1))*Vector3d(1, 0, 0);
       Vector3d col(1.0, 0.0, 0.0);
@@ -115,6 +125,14 @@ int main(int argc, char* argv[]) {
       Particle par(object, vel, col, pmass);
       parts.push_back(par);
   }
+  
+  #ifdef JITTER
+  Particle par(center, Vector2d(0,0), Vector3d(1,1,0), pmass);
+  Matrix2d B;
+  B << 0, -rotation, rotation, 0;
+  par.B = B;
+  parts.push_back(par);
+  #endif
 
   writeParticles(argv[1], parts);
   return 0;

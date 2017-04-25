@@ -1,11 +1,11 @@
 {
 	//"dt" : 0.000000666666666666,
 	"dt" : 0.000000166666666666,
-	"totalTime" : 5,
+	"totalTime" : 3,
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/disc_2.bgeo"
+			"filename" : "parts/disc_jitter.bgeo"
 		}
 	],
 	"grid" : {
