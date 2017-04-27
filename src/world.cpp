@@ -531,11 +531,27 @@ void World::step() {
         for(int i = 0; i < (int)objects[0].particles.size(); i++) {
             Particle &p = objects[0].particles[i];
             //Eigenvalues
-            EigenSolver<Matrix2d> es(p.gradientE*p.gradientP, false);
-            double e1 = es.eigenvalues().real()(0);
-            double e2 = es.eigenvalues().real()(1);
+            /// EigenSolver<Matrix2d> es(p.gradientE*p.gradientP, false);
+            /// double e1 = es.eigenvalues().real()(0);
+            /// double e2 = es.eigenvalues().real()(1);
             /// std::cout << es.eigenvalues() << "\n" << e1 << "\n" << e2 << "\n";
             /// std::exit(0);
+            Matrix2d grad = p.gradientE*p.gradientP;
+            // [w x]
+            // [y z]
+            double w, x, y, z;
+            w = grad(0,0);
+            x = grad(0,1);
+            y = grad(1,0);
+            z = grad(1,1);
+            //solve lambda^2 - (w+z)*lambda + (wz-xy) = 0
+            double a, b, c;
+            a = 1;
+            b = -(w+z);
+            c = w*z-x*y;
+            double e1, e2;
+            e1 = (-b + std::sqrt(b*b - 4*a*c)) / (2*a);
+            e2 = (-b - std::sqrt(b*b - 4*a*c)) / (2*a);
             double cnum = 0;
             if(e1 > e2) {
                 cnum = e1 / e2;

@@ -1,7 +1,7 @@
 {
 	//"dt" : 0.000000666666666666,
 	"dt" : 0.000000166666666666,
-	"totalTime" : 3,
+	"totalTime" : 5,
 	"objects" : [
 		{
 			"type" : "parts",
@@ -16,7 +16,7 @@
 		//"h" : 0.1
 	},
  	"mass" : 1.0,
-	"lame" : [0, 1.0e4],
+	"lame" : [0, 1.0e3],
 	//"massPropDamp" : 0.99999999,
 	"massPropDamp" : 1.0,	
 	"gravity" : [0.0, 0.0]
