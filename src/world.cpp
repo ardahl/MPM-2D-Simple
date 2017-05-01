@@ -408,6 +408,8 @@ void World::init() {
     double kd = 6; //damping coeff
     for(int o = 0; o < (int)objects.size(); o++) {
         std::vector<Particle> &parts = objects[o].particles;
+        std::vector<Spring> &springs = objects[o].springs;
+        std::vector<int> counts(parts.size(), 0);
         for(int i = 0; i < (int)parts.size(); i++) {
             Particle *p = &parts[i];
             //find n closest neighbors
@@ -421,6 +423,21 @@ void World::init() {
                 //Get Distance
                 double dsq = (p->x - p2->x).squaredNorm();
                 //Check if distance is smaller than anything existing
+                if((int)neighbors.size() < n) {
+                    int index;
+                    for(index = 0; index < (int)neighbors.size(); index++) {
+                        if(dsq < dists[index]) {
+                            neighbors.insert(neighbors.begin()+index, p2);
+                            dists.insert(dists.begin()+index, dsq);
+                            break;
+                        }
+                    }
+                    if(index == (int)neighbors.size()) {
+                        neighbors.push_back(p2);
+                        dists.push_back(dsq);
+                    }
+                    continue;
+                }
                 for(int k = 0; k < (int)neighbors.size(); k++) {
                     if(dsq < dists[k]) {
                         neighbors.insert(neighbors.begin()+k, p2);
@@ -435,14 +452,11 @@ void World::init() {
             //check if neighbors already have spring connected to this particle
             std::vector<Particle*> newNeigh;
             for(int j = 0; j < (int)neighbors.size(); j++) {
-                std::vector<Spring> &springs = neighbors[j]->springs;
-                if(springs.size() == 0) {
-                    newNeigh.push_back(neighbors[j]);
-                }
                 bool exist = false;
                 for(int k = 0; k < (int)springs.size(); k++) {
-                    if(p->x == springs[k].p0->x || p->x == springs[k].p1->x) {
+                    if((p->x == springs[k].p0->x || p->x == springs[k].p1->x) && (neighbors[j]->x == springs[k].p0->x || neighbors[j]->x == springs[k].p1->x)) {
                         exist = true;
+                        break;
                     }
                 }
                 if(!exist) {
@@ -457,9 +471,23 @@ void World::init() {
                 sp.r = (p->x - newNeigh[j]->x).norm();
                 sp.ks = ks;
                 sp.kd = kd;
-                p->springs.push_back(sp);
+                springs.push_back(sp);
             }
         }
+        printf("Springs: %d\n", (int)springs.size());
+        for(int i = 0; i < (int)springs.size(); i++) {
+            Particle* p0 = springs[i].p0;
+            Particle* p1 = springs[i].p1;
+            for(int j = 0; j < (int)parts.size(); j++) {
+                if(parts[j].x == p0->x || parts[j].x == p1->x) {
+                    counts[j]++;
+                }
+            }
+        }
+        for(int i = 0; i < (int)counts.size(); i++) {
+            printf("Part %d: %d\n", i, counts[i]);
+        }
+        std::exit(0);
     }
     
     
@@ -861,21 +889,18 @@ void World::computeGridForces() {
     {auto timer2 = prof.timeName("cgf Object Loop"); 
     for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
-        MaterialProps &mp = objects[obj].mp;
+        /// MaterialProps &mp = objects[obj].mp;
         {auto timer = prof.timeName("cgf Particles Loop"); 
         //*
-        for(size_t i = 0; i < particles.size(); i++) {
-            Particle &p = particles[i];
-            for(int j = 0; i < p.springs.size(); j++) {
-                Spring sp = p.springs[j];
-                Vector2d I = sp.p0->x - sp.p1->x;
-                Vector2d II = sp.p0->v - sp.p1->v;
-                double inorm = I.norm();
-                double idot = II.dot(I);
-                Vector2d fa = -(sp.ks*(inorm-sp.r) + sp.kd*(idot/inorm)) * (I/inorm);
-                sp.p0->f += fa;
-                sp.p1->f -= fa;
-            }
+        for(int j = 0; j < (int)objects[obj].springs.size(); j++) {
+            Spring sp = objects[obj].springs[j];
+            Vector2d I = sp.p0->x - sp.p1->x;
+            Vector2d II = sp.p0->v - sp.p1->v;
+            double inorm = I.norm();
+            double idot = II.dot(I);
+            Vector2d fa = -(sp.ks*(inorm/sp.r-1) + sp.kd*(idot/inorm)) * (I/inorm);
+            sp.p0->f += fa;
+            sp.p1->f -= fa;
         }
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];

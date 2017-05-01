@@ -35,7 +35,6 @@ public:
     Eigen::Vector2d vold;
     Eigen::Vector2d xo;
     #endif
-    std::vector<Spring> springs;
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
 	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
@@ -58,6 +57,7 @@ struct Object {
   Eigen::Vector2d object, center;
   std::vector<Particle> particles;
   Eigen::Matrix2d *D;                   //B*Dinv is an approximation of gradV, so maybe store it for later
+  std::vector<Spring> springs;
 };
   
 
