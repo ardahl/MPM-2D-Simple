@@ -11,7 +11,7 @@
 #include "json/json.h"
 #include "range.hpp"
 
-/// #define RAND
+#define RAND false
 #define JITTER
 
 #define CIRCLE true //could change to SQUARE, LINE
@@ -28,7 +28,9 @@ int main(int argc, char* argv[]) {
   int ores[2] = {50,50};
   double pmass = 1.0;
   double rotation = 0.75;
+  #if RAND
   int numPart = 648;
+  #endif
   std::srand(std::time(0));
   
 #if SQUARE
@@ -100,7 +102,7 @@ int main(int argc, char* argv[]) {
 		parts.push_back(par);
 	  }
 	}
-#ifndef RAND
+#if !RAND
   }
 #endif
 #elif LINE

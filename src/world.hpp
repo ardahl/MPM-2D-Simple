@@ -8,7 +8,14 @@
 #include <fstream>
 #include "profiler.hpp"
 
-class Force;
+class Particle;
+
+class Spring {
+public:
+    Particle *p0, *p1;
+    double r;           //rest length
+    double ks, kd;      //spring const, damping const
+};
 
 class Particle {
 public:
@@ -20,6 +27,7 @@ public:
     Eigen::Vector3d c1, c2;
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
     Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
+    Eigen::Vector2d f;
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
@@ -27,9 +35,10 @@ public:
     Eigen::Vector2d vold;
     Eigen::Vector2d xo;
     #endif
+    std::vector<Spring> springs;
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
+	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 

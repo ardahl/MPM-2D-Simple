@@ -188,8 +188,9 @@ int main(int argc, char** argv) {
     //From docs: http://docs.opencv.org/3.2.0/dd/d9e/classcv_1_1VideoWriter.html#ac3478f6257454209fa99249cc03a5c59
         //FFMPEG backend with MP4 container natively uses other values as fourcc code: see ObjectType, so you may receive a warning message from OpenCV about fourcc code conversion. 
     /// output = cv::VideoWriter(videoout, CV_FOURCC('H', '2', '6', '4'), 30, cv::Size(width, height));
-    //0x20 is the code for the mp4v codec (MPEG-4 Video), CV_FOURCC gives a different tag
-    output = cv::VideoWriter(videoout, 0x20, 30, cv::Size(width, height));
+    //0x20 is the code for the mp4v codec (MPEG-4 Video)
+    //0x21 should be the code for the H.264 codec
+    output = cv::VideoWriter(videoout, 0x21, 30, cv::Size(width, height));
     if(!output.isOpened()) {
         printf("Not Open\n");
         std::exit(0);

@@ -20,7 +20,6 @@ std::ofstream debug;
 #ifdef INFO
 /// std::ofstream debug("debug.txt");
 std::ofstream cond("cond.txt");
-std::ofstream cmat("c.txt");
 std::ofstream xdiff("xdiff.txt");
 std::ofstream ydiff("ydiff.txt");
 double rot1 = 0;
@@ -400,6 +399,70 @@ inline void bounds(const Vector2d &offset, const int res[2], int *xbounds, int *
 
 void World::init() {
     particleVolumesDensities();
+    
+    /******
+     * Init Springs
+     ******/
+    int n = 10; //number of neighbors
+    double ks = 300; //spring coeff
+    double kd = 6; //damping coeff
+    for(int o = 0; o < (int)objects.size(); o++) {
+        std::vector<Particle> &parts = objects[o].particles;
+        for(int i = 0; i < (int)parts.size(); i++) {
+            Particle *p = &parts[i];
+            //find n closest neighbors
+            std::vector<Particle*> neighbors;
+            std::vector<double> dists;
+            for(int j = 0; j < (int)parts.size(); j++) {
+                if(i == j) {
+                    continue;
+                }
+                Particle *p2 = &parts[j];
+                //Get Distance
+                double dsq = (p->x - p2->x).squaredNorm();
+                //Check if distance is smaller than anything existing
+                for(int k = 0; k < (int)neighbors.size(); k++) {
+                    if(dsq < dists[k]) {
+                        neighbors.insert(neighbors.begin()+k, p2);
+                        dists.insert(dists.begin()+k, dsq);
+                    }
+                    if((int)neighbors.size() > n) {
+                        neighbors.pop_back();
+                        dists.pop_back();
+                    }
+                }
+            }
+            //check if neighbors already have spring connected to this particle
+            std::vector<Particle*> newNeigh;
+            for(int j = 0; j < (int)neighbors.size(); j++) {
+                std::vector<Spring> &springs = neighbors[j]->springs;
+                if(springs.size() == 0) {
+                    newNeigh.push_back(neighbors[j]);
+                }
+                bool exist = false;
+                for(int k = 0; k < (int)springs.size(); k++) {
+                    if(p->x == springs[k].p0->x || p->x == springs[k].p1->x) {
+                        exist = true;
+                    }
+                }
+                if(!exist) {
+                    newNeigh.push_back(neighbors[j]);
+                }
+            }
+            //otherwise, add it to the list
+            for(int j = 0; j < (int)newNeigh.size(); j++) {
+                Spring sp;
+                sp.p0 = p;
+                sp.p1 = newNeigh[j];
+                sp.r = (p->x - newNeigh[j]->x).norm();
+                sp.ks = ks;
+                sp.kd = kd;
+                p->springs.push_back(sp);
+            }
+        }
+    }
+    
+    
     //Bootstrap on an APIC transfer to the grid and back
     #ifdef INFO
     for(int o = 0; o < (int)objects.size(); o++) {
@@ -521,9 +584,6 @@ void World::step() {
             /// err += ((rotM*xc+objects[0].center)-p.x).norm();
         /// }
         /// debug << err << "\n";
-        //Check if C is constant
-        Matrix2d C = objects[0].particles[0].B * objects[0].D[0];
-        cmat << "Frame " << stepNum / 200000 << "\nC[0]:\n" << C << "\n\n";
         //Check condition number
         //Loop through particles, find eigenvalues, divide larger by smaller
         //Output worst
@@ -565,7 +625,6 @@ void World::step() {
         }
         cond << stepNum / 200000 << " " << maxCond << "\n";
         cond.flush();
-        cmat.flush();
     }
     #endif
     stepNum++;
@@ -797,13 +856,43 @@ void World::particlesToGrid() {
 void World::computeGridForces() {
     auto timer = prof.timeName("computeGridForces");
     {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d(0.0,0.0);}
-	
+	{for(int i = 0; i < (int)objects[0].particles.size(); i++) objects[0].particles[i].f = Vector2d::Zero();}
+    
     {auto timer2 = prof.timeName("cgf Object Loop"); 
     for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         MaterialProps &mp = objects[obj].mp;
         {auto timer = prof.timeName("cgf Particles Loop"); 
+        //*
         for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            for(int j = 0; i < p.springs.size(); j++) {
+                Spring sp = p.springs[j];
+                Vector2d I = sp.p0->x - sp.p1->x;
+                Vector2d II = sp.p0->v - sp.p1->v;
+                double inorm = I.norm();
+                double idot = II.dot(I);
+                Vector2d fa = -(sp.ks*(inorm-sp.r) + sp.kd*(idot/inorm)) * (I/inorm);
+                sp.p0->f += fa;
+                sp.p1->f -= fa;
+            }
+        }
+        for(size_t i = 0; i < particles.size(); i++) {
+            Particle &p = particles[i];
+            Vector2d offset = (p.x - origin) / h;
+            int xbounds[2], ybounds[2];
+            bounds(offset, res, xbounds, ybounds);
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    double w = w1*weight(offset(1) - k);
+                    frc[j*res[1]+k] += w * p.f;
+                }
+            }
+        }}
+        //*/
+        /*
+        for(int i = 0; i < (int)particles.size(); i++) {
             Particle &p = particles[i];
             Matrix2d gradient = p.gradientE*p.gradientP; 
             /// Matrix2d gradient = p.gradientE;
@@ -874,6 +963,7 @@ void World::computeGridForces() {
                 }
             }}
         }}
+        */
 	}}
 }
 
@@ -1114,6 +1204,12 @@ void World::gridToParticles() {
 
             //Update Positions
             p.x += dt * p.v;
+            
+            //Overriding particle velocities with expected values
+            //ph = pos-center
+            //expected value is rotation* (-ph(1), ph(0))
+            /// Vector2d ph = p.x - objects[obj].center;
+            /// p.v = 0.75 * Vector2d(-ph(1), ph(0));
             
             #ifndef NDEBUG
             if(p.x.hasNaN()) {
