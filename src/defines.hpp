@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#define MAT_TRANSFER
+
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later
 /// in which case it will need to move. But for now it'll rest here.

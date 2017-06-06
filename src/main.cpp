@@ -7,6 +7,7 @@
 #include <iomanip>
 
 using namespace Eigen;
+/// #define SLOMO
 
 #ifndef NDEBUG
 extern std::ofstream debug;
@@ -14,8 +15,9 @@ extern std::ofstream debug;
 
 #ifdef SLOMO
 //For slow motion, set start/end frame
-int startFrame = 21;
-int endFrame = 24;
+int startFrame = 0;
+int endFrame = 1;
+int slowmoSteps = 400;
 #endif
 
 int main(int argc, char** argv) {
@@ -50,7 +52,7 @@ int main(int argc, char** argv) {
       #ifndef SLOMO
       if (timeSinceLastFrame > 1.0/30.0) {
       #else
-      if(frame >= startFrame && frame <= endFrame && iters % 500 == 0) {
+      if(frame >= startFrame && frame <= endFrame && iters % slowmoSteps == 0) {
       #endif
         for (unsigned int obj = 0; obj<world.objects.size(); obj++) {
 		  std::ostringstream ss;

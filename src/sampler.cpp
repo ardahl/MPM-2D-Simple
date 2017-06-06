@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
   // parameters of the object
   double size[2] = {0.25, 0.25};
   Vector2d object(0.0,0.5);
-  int ores[2] = {50,50};
+  int ores[2] = {75,75};
   double pmass = 1.0;
   double rotation = 0.75;
   #if RAND
@@ -93,9 +93,10 @@ int main(int argc, char* argv[]) {
       }
 	  Vector2d ph = pos - object;
 	  if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
-		Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
+		/// Vector2d vel = rotation*Vector2d(-ph(1), ph(0));
         /// Vector2d vel(pos(0), pos(1));
-        Particle par(pos, 1.0*vel, col, pmass);
+        Vector2d vel(1.0, 0.0);
+        Particle par(pos, vel, col, pmass);
         Matrix2d B;
         B << 0, -rotation, rotation, 0;
         par.B = B;

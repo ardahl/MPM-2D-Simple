@@ -11,8 +11,8 @@ if( NOT CMAKE_BUILD_TYPE )
 endif()
 #Uncomment line below to still use O3 optimization with debugging
 set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declarations" )
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -g -Wno-int-in-bool-context")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-int-in-bool-context -Wno-deprecated-declarations" )
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DINFO")
 

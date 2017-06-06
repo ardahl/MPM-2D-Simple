@@ -22,6 +22,7 @@ public:
     //Temp
     Eigen::Matrix2d B;         //B matrix from APIC paper
     
+    Eigen::Vector2d u;        //Initial position (rest state)
     Eigen::Vector2d x, v;      //postition, velocity
     Eigen::Vector3d color;
     Eigen::Vector3d c1, c2;
@@ -37,7 +38,7 @@ public:
     #endif
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
+	  B(Eigen::Matrix2d::Zero()), u(x), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
@@ -73,7 +74,11 @@ public:
     double *mass;
     //No pressure projection, so no staggered grid needed
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
-
+    //Material coordinates
+    Eigen::Vector2d *mat;
+    Eigen::Matrix2d *stress;
+    double *weights;
+    
     // particle object
     std::vector<Object> objects;
 

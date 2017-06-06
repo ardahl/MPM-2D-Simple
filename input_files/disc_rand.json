@@ -5,7 +5,7 @@
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/random.bgeo"
+			"filename" : "parts/disc_random.bgeo"
 		}
 	],
 	"grid" : {

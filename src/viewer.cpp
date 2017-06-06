@@ -182,13 +182,20 @@ int main(int argc, char *argv[]) {
     //0x20 is the code for the mp4v codec (MPEG-4 Video)
     //0x21 should be the code for the H.264 codec
     output = cv::VideoWriter(videoout, 0x21, 30, cv::Size(width, height));
+    if(!output.isOpened()) {
+        printf("Video Failed to open\n");
+        std::exit(1);
+    }
     
     std::string config = std::string(conffile);
     world = new World(config);
     world->init();
     
     readAnimation(outfile.c_str(), frames);
-
+    printf("Frames: %d\n", (int)frames.size());
+    if(frames.size() == 0) { 
+        std::exit(0);
+    }
     glutMainLoop();
   
     return 0;
