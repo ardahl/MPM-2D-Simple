@@ -1476,12 +1476,14 @@ void World::gridToParticles() {
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             //Update velocities
-            p.B = Matrix2d::Zero();
+            /// p.B = Matrix2d::Zero();
             Vector2d apic = Vector2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
-            {auto timer = prof.timeName("gtp Bound Loop"); 
+            Matrix2d Bs, Be;
+            Bs = Matrix2d::Zero();
+            /// {auto timer = prof.timeName("gtp Bound Loop"); 
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 double w1 = weight(offset(0) - j);
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
@@ -1490,10 +1492,12 @@ void World::gridToParticles() {
                     Vector2d xg = origin + h*Vector2d(j, k);
                     Vector2d wvel = w * velStar[index];
                     apic += wvel;
-                    p.B += wvel * (xg - p.x).eval().transpose().eval();
+                    /// p.B += wvel * (xg - p.x).transpose();
+                    Bs += wvel * (xg - p.x).transpose();
                 }
-            }}
-            {auto timer = prof.timeName("gtp Vel and Position Update"); 
+            }
+            /// }
+            /// {auto timer = prof.timeName("gtp Vel and Position Update"); 
             #ifndef NDEBUG
             if(apic.hasNaN()) {
                 printf("\n\nAPIC Vel has NaN\n");
@@ -1501,7 +1505,60 @@ void World::gridToParticles() {
                 exit(0);
             }
             #endif
-            p.v = apic;
+            /// p.v = apic;
+            //For testing, do RK2 (trapezoidal) time integration. Use bilinear(2D) interpolation for values
+            //Bilinear for starting value
+            /// Vector2d x = (p.x - origin) / h;
+            /// int x1 = (int)x(0);
+            /// int x2 = x1+1;
+            /// int y1 = (int)x(1);
+            /// int y2 = y1+1;
+            /// Vector2d Q11 = velStar[x1*res[1]+y1];
+            /// Vector2d Q21 = velStar[x2*res[1]+y1];
+            /// Vector2d Q12 = velStar[x1*res[1]+y2];
+            /// Vector2d Q22 = velStar[x2*res[1]+y2];
+            /// double xd1 = (x2-x(0))/(x2-x1);
+            /// double xd2 = (x(0)-x1)/(x2-x1);
+            /// Vector2d fy1 = xd1*Q11 + xd2*Q21;
+            /// Vector2d fy2 = xd1*Q12 + xd2*Q22;
+            /// Vector2d vs = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;
+            Vector2d vs = apic;
+            //Do a temperary timestep for candidate position
+            Vector2d xn = p.x + dt * vs;
+            //Bilinear for ending value
+            /// x = (xn - origin) / h;
+            /// x1 = (int)x(0);
+            /// x2 = x1+1;
+            /// y1 = (int)x(1);
+            /// y2 = y1+1;
+            /// Q11 = velStar[x1*res[1]+y1];
+            /// Q21 = velStar[x2*res[1]+y1];
+            /// Q12 = velStar[x1*res[1]+y2];
+            /// Q22 = velStar[x2*res[1]+y2];
+            /// xd1 = (x2-x(0))/(x2-x1);
+            /// xd2 = (x(0)-x1)/(x2-x1);
+            /// fy1 = xd1*Q11 + xd2*Q21;
+            /// fy2 = xd1*Q12 + xd2*Q22;
+            /// Vector2d ve = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;
+            apic = Vector2d::Zero();
+            offset = (xn - origin) / h;
+            bounds(offset, res, xbounds, ybounds);
+            Be = Matrix2d::Zero(); 
+            for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                double w1 = weight(offset(0) - j);
+                for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    double w = w1*weight(offset(1) - k);
+                    int index = j*res[1] + k;
+                    Vector2d xg = origin + h*Vector2d(j, k);
+                    Vector2d wvel = w * velStar[index];
+                    apic += wvel;
+                    Be += wvel * (xg - p.x).transpose();
+                }
+            }
+            Vector2d ve = apic;
+            //Average and set velocity to that
+            p.v = (vs + ve) / 2;
+            p.B = (Bs + Be) / 2;
             //Mass proportional damping
             p.v = mp.massPropDamp * p.v;
             
@@ -1546,7 +1603,7 @@ void World::gridToParticles() {
                 p.x(1) = uy-EPS;
                 p.v(1) *= -1;
             }
-            }
+            /// }
         }}
     }
 }
