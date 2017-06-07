@@ -1552,7 +1552,7 @@ void World::gridToParticles() {
                     Vector2d xg = origin + h*Vector2d(j, k);
                     Vector2d wvel = w * velStar[index];
                     apic += wvel;
-                    Be += wvel * (xg - p.x).transpose();
+                    Be += wvel * (xg - xn).transpose();
                 }
             }
             Vector2d ve = apic;
