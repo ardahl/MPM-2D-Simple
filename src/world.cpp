@@ -311,10 +311,21 @@ World::World(std::string config) {
     mass = new double[res[0]*res[1]];
     vel = new Vector2d[res[0]*res[1]];
     velStar = new Vector2d[res[0]*res[1]];
+    prevVel = new Vector2d[res[0]*res[1]];
     frc = new Vector2d[res[0]*res[1]];
     mat = new Vector2d[res[0]*res[1]];
     weights = new double[res[0]*res[1]];
     stress = new Matrix2d[res[0]*res[1]]; 
+    valid.assign(res[0]*res[1], 0);
+    
+    {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d::Zero();}
+    {Vector2d *c = mat; for (int i=0; i<res[0]*res[1]; i++, c++) (*c) = Vector2d::Zero();}
+    {Vector2d *vs = velStar; for (int i=0; i<res[0]*res[1]; i++, vs++) (*vs) = Vector2d::Zero();}
+    {Vector2d *vo = prevVel; for (int i=0; i<res[0]*res[1]; i++, vo++) (*vo) = Vector2d::Zero();}
+    {Vector2d *f = frc; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d::Zero();}
+    {Matrix2d *s = stress; for (int i=0; i<res[0]*res[1]; i++, s++) (*s) = Matrix2d::Zero();}
+    {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
+    {double *w = weights; for (int i=0; i<res[0]*res[1]; i++, w++) (*w) = 0.0;}
     
     /// #ifdef INFO
     /// polar.open("/nfs/scratch/adahl1/disc/polar.txt");
@@ -508,6 +519,15 @@ void World::particleVolumesDensities() {
         #endif
 	  }
 	}
+    
+    //Init material coordinates
+    for(int i = 0; i < res[0]; i++) {
+        for(int j = 0; j < res[1]; j++) {
+            int ind = i*res[1]+j;
+            Vector2d xg = origin + h*Vector2d(i,j);
+            mat[ind] = xg;
+        }
+    }
 }
 
 /******************************
@@ -526,48 +546,19 @@ void World::step() {
     particlesToGrid();
     computeGridForces();
     updateGridVelocities();
+#ifndef MAT_TRANSFER
     updateGradient();
+#else
+    //Material coordinates are initialized to world coordinates
+    //Extrapolate velocity field with fast march
+        //March out ~5 times
+    velExtrapolate();
+    //Advect material coordinates
+        //interpolate velocities at v[t] and v[t-dt] and average
+        //step back by that amount and interpolate material coordinates around that point
+    advect();
+#endif
     gridToParticles();
-    #ifdef INFO
-    if(stepNum % 200000 == 0) {
-        //Check condition number
-        //Loop through particles, find eigenvalues, divide larger by smaller
-        //Output worst
-        double maxCond = 0;
-        for(int i = 0; i < (int)objects[0].particles.size(); i++) {
-            Particle &p = objects[0].particles[i];
-            //Eigenvalues
-            Matrix2d grad = p.gradientE*p.gradientP;
-            // [w x]
-            // [y z]
-            double w, x, y, z;
-            w = grad(0,0);
-            x = grad(0,1);
-            y = grad(1,0);
-            z = grad(1,1);
-            //solve lambda^2 - (w+z)*lambda + (wz-xy) = 0
-            double a, b, c;
-            a = 1;
-            b = -(w+z);
-            c = w*z-x*y;
-            double e1, e2;
-            e1 = (-b + std::sqrt(b*b - 4*a*c)) / (2*a);
-            e2 = (-b - std::sqrt(b*b - 4*a*c)) / (2*a);
-            double cnum = 0;
-            if(e1 > e2) {
-                cnum = e1 / e2;
-            }
-            else {
-                cnum = e2 / e1;
-            }
-            if(cnum > maxCond) {
-                maxCond = cnum;
-            }
-        }
-        cond << stepNum / 200000 << " " << maxCond << "\n";
-        cond.flush();
-    }
-    #endif
     stepNum++;
 	elapsedTime += dt;
 }
@@ -592,42 +583,38 @@ void World::step() {
 void World::particlesToGrid() {
     auto timer = prof.timeName("particlesToGrid");
     {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d(0.0,0.0);}
-    {Vector2d *c = mat; for (int i=0; i<res[0]*res[1]; i++, c++) (*c) = Vector2d(0.0,0.0);}
+    /// {Vector2d *c = mat; for (int i=0; i<res[0]*res[1]; i++, c++) (*c) = Vector2d(0.0,0.0);}
     {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
     {double *w = weights; for (int i=0; i<res[0]*res[1]; i++, w++) (*w) = 0.0;}
     
     Matrix2d tmpD = ((h*h)/3.0)*Matrix2d::Identity();
     Matrix2d tmpDinv = (3.0/(h*h))*Matrix2d::Identity();
     
-    {auto timer2 = prof.timeName("ptg Object Loop");
 	for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         Matrix2d *Dtensor = objects[obj].D;
-        {auto timer3 = prof.timeName("ptg Particles Loop");
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             if(stepNum == 0) {
                 Matrix2d C;
-                /// C << 0, -0.75, 0.75, 0; //Rotational (rotation=0.75) Case
-                C << 0, 0, 0, 0;
+                C << 0, -0.75, 0.75, 0; //Rotational (rotation=0.75) Case
+                /// C << 0, 0, 0, 0;
                 p.B = C * tmpD;
             }
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
-            Vector2d xp = p.x;                                      //particle position
-            {auto timer4 = prof.timeName("ptg Bounded Loop 1");                     
+            Vector2d xp = p.x;                                      //particle position                   
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 double w1 = weight(offset(0) - j);
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
                     int index = j*res[1] + k;
                     double w = w1*weight(offset(1) - k);
                     mass[index] += w * p.m;
-                    mat[index] += w * p.u;
-                    weights[index] += w;
+                    /// mat[index] += w * p.u;
+                    /// weights[index] += w;
                 }
-            }}
-            {auto timer5 = prof.timeName("ptg Bounded Loop 2"); 
+            }
             Matrix2d Dinv = tmpDinv;  
             Dtensor[i] = Dinv;
             Vector2d mv = p.m*p.v;
@@ -639,52 +626,26 @@ void World::particlesToGrid() {
                     Vector2d xg = origin + h*Vector2d(j, k);
                     vel[j*res[1] + k] += w * (mv + mBD*(xg-xp).eval());
                 }
-            }}
-        }}
-        /// #ifdef INFO
-        /// if(stepNum%5000 == 0) {
-            /// double rotDet = 0;
-            /// double angVel = 0;
-            /// double inertia = 0, omega = 0;
-            /// for(int i = 0; i < (int)particles.size(); i++) {
-                /// Particle &p = particles[i];
-                /// inertia += p.m * (p.x-objects[0].center).squaredNorm();
-            /// }
-            /// for(int i = 0; i < (int)particles.size(); i++) {
-                /// Particle &p = particles[i];
-                /// Matrix2d F = p.gradientE*p.gradientP;
-                /// Matrix2d FT = F.transpose();
-                /// //Decompose F = RS
-                /// Matrix2d S = (FT*F).sqrt();
-                /// /// Matrix2d R = F*S.inverse();
-                /// //Want to look at forbeneous norm of symmetric part. So don't need rotation
-                /// rotDet += (S-Matrix2d::Identity()).norm();
-                /// omega += p.v.norm() / (objects[0].center-p.x).norm();
-            /// }
-            /// rotDet /= particles.size();
-            /// omega /= particles.size();
-            /// angVel = 0.5 * inertia * omega*omega;
-            /// polar << elapsedTime << " " << rotDet << "\n";
-            /// kinetic << elapsedTime << " " << angVel << "\n";
-        /// }
-        /// #endif
-	}}
-    {auto timer6 = prof.timeName("ptg Vel Loop"); 
+            }
+        }
+	}
 	for(int i = 0; i < res[0]; i++) {
 		for(int j = 0; j < res[1]; j++) {
             int index = i*res[1]+j;
             if(mass[index] < EPS) {
                 vel[index] = Vector2d(0.0, 0.0);
+                valid[index] = 0;
             }
             else {
                 vel[index] /= mass[index];
+                valid[index] = 1;
             }
-            if(weights[index] < EPS) {
-                mat[index] = Vector2d::Zero();
-            }
-            else {
-                mat[index] /= weights[index];
-            }
+            /// if(weights[index] < EPS) {
+                /// mat[index] = Vector2d::Zero();
+            /// }
+            /// else {
+                /// mat[index] /= weights[index];
+            /// }
             #ifndef NDEBUG
             if(vel[index].hasNaN()) {
                 printf("interpolated vel NaN at (%d, %d)\n", i, j);
@@ -693,7 +654,7 @@ void World::particlesToGrid() {
             }
             #endif
         }
-	}}
+	}
 }
 
 /******************************
@@ -720,6 +681,8 @@ void World::computeGridForces() {
 #ifdef MAT_TRANSFER
     #ifndef NDEBUG
     Matrix2d *dgrad, *dF, *dFT, *dA, *dS, *dSt, *dstrain;
+    double *gradDet = new double[res[0]*res[1]];
+    double *cond = new double[res[0]*res[1]];
     dgrad = new Matrix2d[res[0]*res[1]];
     dF = new Matrix2d[res[0]*res[1]];
     dFT = new Matrix2d[res[0]*res[1]];
@@ -731,31 +694,31 @@ void World::computeGridForces() {
     //Do finite difference to make the deformation gradient at each grid point
     for(int obj = 0; obj < (int)objects.size(); obj++) {
         MaterialProps &mp = objects[obj].mp;
-        #ifndef NDEBUG
-        debug << "Mat:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(";
-                if(mat[index](0) < 0) {
-                    debug << std::fixed << std::setprecision(5) << mat[index](0);
-                }
-                else {
-                    debug << std::fixed << std::setprecision(6) << mat[index](0);
-                }
-                debug << ",";
-                if(mat[index](1) < 0) {
-                    debug << std::fixed << std::setprecision(5) << mat[index](1);
-                }
-                else {
-                    debug << std::fixed << std::setprecision(6) << mat[index](1);
-                }
-                debug << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        #endif
+        /// #ifndef NDEBUG
+        /// debug << "Mat:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int i = 0; i < res[0]; i++) {
+                /// int index = i*res[1]+j;
+                /// debug << "(";
+                /// if(mat[index](0) < 0) {
+                    /// debug << std::fixed << std::setprecision(5) << mat[index](0);
+                /// }
+                /// else {
+                    /// debug << std::fixed << std::setprecision(6) << mat[index](0);
+                /// }
+                /// debug << ",";
+                /// if(mat[index](1) < 0) {
+                    /// debug << std::fixed << std::setprecision(5) << mat[index](1);
+                /// }
+                /// else {
+                    /// debug << std::fixed << std::setprecision(6) << mat[index](1);
+                /// }
+                /// debug << ") ";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
+        /// #endif
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 int index = i*res[1]+j;
@@ -765,7 +728,6 @@ void World::computeGridForces() {
                 int ym1 = i*res[1]+(j-1);
                 Vector2d dx, dy;
                 //First order central difference (x_n+1 - x_n-1) / 2h
-                //Second order central difference (x_n+1 - 2x_n + x_n-1) / h^2
                 if(j == 0) {    //forward
                     dy = (mat[yp1] - mat[index]) / h;
                 }
@@ -774,7 +736,6 @@ void World::computeGridForces() {
                 }
                 else {  //center
                     dy = (mat[yp1] - mat[ym1]) / (2*h);
-                    /// dy = (mat[i*res[1]+(j+1)] - 2*mat[i*res[1]+j] + mat[i*res[1]+(j-1)]) / (h*h);
                 }
                 
                 if(i == 0) {
@@ -785,7 +746,6 @@ void World::computeGridForces() {
                 }
                 else {
                     dx = (mat[xp1] - mat[xm1]) / (2*h);
-                    /// dx = (mat[(i+1)*res[1]+j] - 2*mat[i*res[1]+j] + mat[(i-1)*res[1]+j]) / (h*h);
                 }
                 
                 //Form inverse deformation gradient [dx dy]
@@ -793,6 +753,29 @@ void World::computeGridForces() {
                 grad.col(0) = dx;
                 grad.col(1) = dy;
                 #ifndef NDEBUG
+                double w, x, y, z;
+                w = grad(0,0);
+                x = grad(0,1);
+                y = grad(1,0);
+                z = grad(1,1);
+                //solve lambda^2 - (w+z)*lambda + (wz-xy) = 0
+                double a, b, c;
+                a = 1;
+                b = -(w+z);
+                c = w*z-x*y;
+                double e1, e2;
+                e1 = (-b + std::sqrt(b*b - 4*a*c)) / (2*a);
+                e2 = (-b - std::sqrt(b*b - 4*a*c)) / (2*a);
+                double cnum = 0;
+                if(e1 > e2) {
+                    cnum = e1 / e2;
+                }
+                else {
+                    cnum = e2 / e1;
+                }
+                if(b*b - 4*a*c < 0) {
+                    cnum = 0;
+                }
                 if(grad.hasNaN()) {
                     printf("\n%d, %d\n", i, j);
                     printf("dx: (%f, %f), (%f, %f)\n", dx(0), dx(1), grad.col(0)(0), grad.col(0)(1));
@@ -800,11 +783,14 @@ void World::computeGridForces() {
                     fflush(stdout);
                     std::exit(1);
                 }
-                #endif
-                if(grad.determinant() < 1e-5) {
+                gradDet[index] = grad.determinant();
+                cond[index] = cnum;
+                #endif  
+                double det = grad.determinant();
+                if(std::abs(det) < 1e-4) {
                     stress[index] = Matrix2d::Zero();
                     #ifndef NDEBUG
-                    dgrad[index] = Matrix2d::Zero();
+                    dgrad[index] = grad;
                     dF[index] = Matrix2d::Zero();
                     dFT[index] = Matrix2d::Zero();
                     dA[index] = Matrix2d::Zero();
@@ -839,13 +825,6 @@ void World::computeGridForces() {
                     /// S(1,1) += s;
                     /// S /= t;
                     
-                    /// if(((S*S)-A).norm() > 1e-4) {
-                        /// printf("Not sqrt\n");
-                        /// std::cout << S << "\n";
-                        /// std::cout << "Norm: " << ((S*S)-A).norm() << "\n"; 
-                        /// std::cout << S*S << "\n";
-                        /// std::cout << A << "\n\n";
-                    /// }
                     #ifndef NDEBUG
                     if(S.hasNaN()) {
                         printf("S: %d, %d\n", i, j);
@@ -897,12 +876,63 @@ void World::computeGridForces() {
                 }
             }
         }
+        //Try smoothing stress field
+        /// int numSmooth = 1; //just 1 pass for now
+        /// Matrix2d *tmpstress = new Matrix2d[res[0]*res[1]];
+        /// int xp1, xm1, yp1, ym1;
+        /// for(int s = 0; s < numSmooth; s++) {
+            /// for(int i = 0; i < res[0]; i++) {
+                /// for(int j = 0; j < res[1]; j++) {
+                    /// //Extend kernal past end
+                    /// if(i == res[0]-1) {
+                        /// xp1 = i;
+                    /// }
+                    /// else {
+                        /// xp1 = i + 1;
+                    /// }
+                    /// if(i == 0) {
+                        /// xm1 = i;
+                    /// }
+                    /// else {
+                        /// xm1 = i - 1;
+                    /// }
+                    /// if(j == res[1]-1) {
+                        /// yp1 = j;
+                    /// }
+                    /// else {
+                        /// yp1 = j + 1;
+                    /// }
+                    /// if(j == 0) {
+                        /// ym1 = j;
+                    /// }
+                    /// else {
+                        /// ym1 = j - 1;
+                    /// }
+                    /// //Using kernal:
+                    /// //[0  1  0]
+                    /// //[1 -4  1]
+                    /// //[0  1  0]
+                    /// /// tmpstress[i*res[1]+j] = (stress[xm1*res[1]+j] + stress[xp1*res[1]+j] + stress[i*res[1]+ym1] + stress[i*res[1]+yp1] - 4*stress[i*res[1]+j]) / (h*h);
+                    /// tmpstress[i*res[1]+j] = stress[xm1*res[1]+j] + stress[xp1*res[1]+j] + stress[i*res[1]+ym1] + stress[i*res[1]+yp1] - 4*stress[i*res[1]+j];
+                    /// if(tmpstress[i*res[1]+j].hasNaN()) {
+                        /// printf("Temp Stress NaN\n");
+                        /// std::cout << tmpstress[i*res[1]+j] << "\n";
+                        /// std::cout << stress[xm1*res[1]+j] << "\n";
+                        /// std::cout << stress[xp1*res[1]+j] << "\n";
+                        /// std::cout << stress[i*res[1]+ym1] << "\n";
+                        /// std::cout << stress[i*res[1]+yp1] << "\n";
+                        /// std::cout << 4*stress[i*res[1]+j] << "\n";
+                        /// std::exit(1);
+                    /// }
+                /// }
+            /// }
+            /// for(int i = 0; i < res[0]*res[1]; i++) {
+                /// stress[i] = tmpstress[i];
+            /// }
+        /// }
+        /// delete[] tmpstress;
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
-                if(mass[i*res[1]+j] < EPS) {
-                    frc[i*res[1]+j] = Vector2d::Zero();
-                    continue;
-                }
                 int index = i*res[1]+j;
                 int xp1 = (i+1)*res[1]+j;
                 int xm1 = (i-1)*res[1]+j;
@@ -937,7 +967,6 @@ void World::computeGridForces() {
                 }
                 else {  //center
                     fy = (stress[yp1].row(1) - stress[ym1].row(1)) / (2*h);
-                    /// fy = (stress[i*res[1]+(j+1)].col(1) - 2*stress[i*res[1]+j].col(1) + stress[i*res[1]+(j-1)].col(1)) / (h*h);
                     #ifndef NDEBUG
                     if(fy.hasNaN()) {
                         printf("center fy: %d, %d\n", i, j);
@@ -978,7 +1007,6 @@ void World::computeGridForces() {
                 }
                 else {
                     fx = (stress[xp1].row(0) - stress[xm1].row(0)) / (2*h);
-                    /// fx = (stress[(i+1)*res[1]+j].col(0) - 2*stress[i*res[1]+j].col(0) + stress[(i-1)*res[1]+j].col(0)) / (h*h);
                     #ifndef NDEBUG
                     if(fx.hasNaN()) {
                         printf("center fx: %d, %d\n", i, j);
@@ -990,7 +1018,6 @@ void World::computeGridForces() {
                     }
                     #endif
                 }
-                /// Vector2d force(fx(0)+fx(1), fy(0)+fy(1));
                 Vector2d force(fx(0)+fy(0), fx(1)+fy(1));
                 #ifndef NDEBUG
                 if(force.hasNaN()) {
@@ -1003,265 +1030,287 @@ void World::computeGridForces() {
                 }
                 #endif
                 frc[i*res[1]+j] = force;
-                /// frc[i*res[1]+j] = force / mass[i*res[1]+j];
             }
         }
-        #ifndef NDEBUG
-        debug << "Grad:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dgrad[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dgrad[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dgrad[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dgrad[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dgrad[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dgrad[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// #ifndef NDEBUG
+        /// debug << "Grad:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dgrad[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dgrad[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dgrad[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dgrad[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dgrad[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dgrad[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "F:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dF[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dF[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dF[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dF[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dF[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dF[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "Determinant:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int i = 0; i < res[0]; i++) {
+                /// int ind = i*res[0]+j;
+                /// debug << gradDet[ind] << " ";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "FT:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dFT[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dFT[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dFT[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dFT[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dFT[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dFT[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "Condition:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int i = 0; i < res[0]; i++) {
+                /// int ind = i*res[0]+j;
+                /// debug << cond[ind] << " ";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "A:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dA[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dA[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dA[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dA[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dA[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dA[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "F:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dF[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dF[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dF[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dF[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dF[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dF[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "S:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dS[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dS[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dS[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dS[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dS[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dS[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "FT:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dFT[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dFT[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dFT[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dFT[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dFT[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dFT[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "St:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dSt[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dSt[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dSt[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dSt[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dSt[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dSt[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "A:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dA[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dA[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dA[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dA[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dA[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dA[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "Strain:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(dstrain[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dstrain[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dstrain[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dstrain[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << dstrain[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dstrain[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "S:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dS[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dS[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dS[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dS[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dS[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dS[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "Stress:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(stress[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(5) << stress[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << stress[ind](k,0);
-                    }
-                    debug << ",";
-                    if(stress[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(5) << stress[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << stress[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
+        /// debug << "St:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dSt[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dSt[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dSt[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dSt[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dSt[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dSt[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        debug << "Force:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(";
-                if(frc[index](0) < 0) {
-                    debug << std::fixed << std::setprecision(5) << frc[index](0);
-                }
-                else {
-                    debug << std::fixed << std::setprecision(6) << frc[index](0);
-                }
-                debug << ",";
-                if(frc[index](1) < 0) {
-                    debug << std::fixed << std::setprecision(5) << frc[index](1);
-                }
-                else {
-                    debug << std::fixed << std::setprecision(6) << frc[index](1);
-                }
-                debug << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n\n\n";
+        /// debug << "Strain:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(dstrain[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dstrain[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dstrain[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(dstrain[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << dstrain[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << dstrain[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
         
-        delete[] dgrad;
-        delete[] dF;
-        delete[] dFT;
-        delete[] dA;
-        delete[] dS;
-        delete[] dSt;
-        delete[] dstrain;
-        #endif
+        /// debug << "Stress:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int k = 0; k < 2; k++) {
+                /// for(int i = 0; i < res[0]; i++) {
+                    /// int ind = i*res[0]+j;
+                    /// debug << "[";
+                    /// if(stress[ind](k,0) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << stress[ind](k,0);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << stress[ind](k,0);
+                    /// }
+                    /// debug << ",";
+                    /// if(stress[ind](k,1) < 0) {
+                        /// debug << std::fixed << std::setprecision(5) << stress[ind](k,1);
+                    /// }
+                    /// else {
+                        /// debug << std::fixed << std::setprecision(6) << stress[ind](k,1);
+                    /// }
+                    /// debug << "] ";
+                /// }
+                /// debug << "\n";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n";
+        
+        /// debug << "Force:\n";
+        /// for(int j = res[1]-1; j >= 0; j--) {
+            /// for(int i = 0; i < res[0]; i++) {
+                /// int index = i*res[1]+j;
+                /// debug << "(";
+                /// if(frc[index](0) < 0) {
+                    /// debug << std::fixed << std::setprecision(5) << frc[index](0);
+                /// }
+                /// else {
+                    /// debug << std::fixed << std::setprecision(6) << frc[index](0);
+                /// }
+                /// debug << ",";
+                /// if(frc[index](1) < 0) {
+                    /// debug << std::fixed << std::setprecision(5) << frc[index](1);
+                /// }
+                /// else {
+                    /// debug << std::fixed << std::setprecision(6) << frc[index](1);
+                /// }
+                /// debug << ") ";
+            /// }
+            /// debug << "\n";
+        /// }
+        /// debug << "\n\n\n";
+        
+        /// delete[] dgrad;
+        /// delete[] dF;
+        /// delete[] dFT;
+        /// delete[] dA;
+        /// delete[] dS;
+        /// delete[] dSt;
+        /// delete[] dstrain;
+        /// delete[] gradDet;
+        /// delete[] cond;
+        /// if(stepNum == 3) {
+            /// std::exit(1);
+        /// }
+        /// #endif
     }
 #else
-    {auto timer2 = prof.timeName("cgf Object Loop"); 
     for (unsigned int obj = 0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         MaterialProps &mp = objects[obj].mp;
-        {auto timer = prof.timeName("cgf Particles Loop"); 
     #ifdef LAGRANGE
         for(int j = 0; j < (int)objects[obj].springs.size(); j++) {
             Spring sp = objects[obj].springs[j];
@@ -1285,7 +1334,7 @@ void World::computeGridForces() {
                     frc[j*res[1]+k] += w * p.f;
                 }
             }
-        }}
+        }
     #else
         for(int i = 0; i < (int)particles.size(); i++) {
             Particle &p = particles[i];
@@ -1306,7 +1355,6 @@ void World::computeGridForces() {
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
-            {auto timer = prof.timeName("cgf Bound Loop"); 
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
                     Vector2d accumF = Ftmp * gradweight(Vector2d(offset(0)-j,offset(1)-k),h);
@@ -1323,11 +1371,10 @@ void World::computeGridForces() {
                     }
                     #endif
                 }
-            }}
+            }
         }
     #endif
-        }
-	}}
+	}
 #endif
 }
 
@@ -1339,11 +1386,51 @@ void World::computeGridForces() {
  *****************************/
 void World::updateGridVelocities() {
     auto timer = prof.timeName("updateGridVelocities");
+    #ifndef NDEBUG
+    int it = 15399;
+    if(stepNum > it) {
+        debug << "force:\n";
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                debug << "(";
+                if(frc[i*res[1]+j](0) < 0) {
+                    debug << std::fixed << std::setprecision(5) << frc[i*res[1]+j](0);
+                } 
+                else {
+                    debug << std::fixed << std::setprecision(6) << frc[i*res[1]+j](0);
+                } 
+                debug << ",";
+                if(frc[i*res[1]+j](1) < 0) {
+                    debug << std::fixed << std::setprecision(5) << frc[i*res[1]+j](1);
+                }
+                else {
+                    debug << std::fixed << std::setprecision(6) << frc[i*res[1]+j](1);
+                }
+                debug << ") ";
+            }
+            debug << "\n";
+        }
+        debug << "\n";
+    }
+    #endif
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
             int index = i*res[1] + j;
+            if(stepNum > 0) {
+                prevVel[index] = velStar[index];
+                #ifndef NDEBUG
+                if(stepNum > it && i == 31 && j == 19) {
+                    debug << "previous: (" << prevVel[index](0) << ", " << prevVel[index](1) << ")\n";
+                }
+                #endif
+            }
             if(mass[index] < EPS) {
                 velStar[index] = Vector2d(0, 0);
+                #ifndef NDEBUG
+                if(stepNum > it && i == 31 && j == 19) {
+                    debug << "Mass 0\n" << velStar[index] << "\n";
+                }
+                #endif
             }
             else {
                 Vector2d extfrc(0.0,0.0);
@@ -1355,7 +1442,20 @@ void World::updateGridVelocities() {
                     extfrc += mass[index]*rotation*Vector2d(-d(1), d(0));
                 }
                 velStar[index] = vel[index] + dt * (1.0/mass[index]) * (frc[index] + extfrc); //dt*g
+                #ifndef NDEBUG
+                if(stepNum > it && i == 31 && j == 19) {
+                    debug << std::defaultfloat << "(" << vel[index](0) << "," << vel[index](1) << ") + " << dt << "*(1/" << mass[index] << ")*((" << frc[index](0) << "," << frc[index](1) << ")+(" << extfrc(0) << "," << extfrc(1) << "))\n";
+                }
+                #endif
             }
+            if(stepNum == 0) {
+                prevVel[index] = velStar[index];
+            }
+            #ifndef NDEBUG
+            if(stepNum > it && i == 31 && j == 19) {
+                debug << "vel: (" << velStar[index](0) << ", " << velStar[index](1) << ")\n";
+            }
+            #endif
             #ifndef NDEBUG
             if(velStar[index].hasNaN()) {
                 printf("velStar NaN at (%d, %d)\n", i, j);
@@ -1385,14 +1485,12 @@ void World::updateGradient() {
         MaterialProps &mp = objects[obj].mp;
         /// Matrix2d *D = objects[obj].D;
 
-        {auto timer = prof.timeName("ug Particles Loop"); 
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             Matrix2d gradV = Matrix2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
-            {auto timer = prof.timeName("ug Bound Loop"); 
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
                     int index = j*res[1]+k;
@@ -1411,7 +1509,7 @@ void World::updateGradient() {
                     Matrix2d accumGrad = velStar[index] * gradweight(Vector2d(offset(0)-j,offset(1)-k),h).transpose();
                     gradV += accumGrad;
                 }
-            }}
+            }
             #ifndef NDEBUG
             if(gradV.hasNaN()) {
                 printf("gradV has NaN\n");
@@ -1419,7 +1517,6 @@ void World::updateGradient() {
                 exit(0);
             }
             #endif
-            {auto timer = prof.timeName("ug Grad Update"); 
             /// Matrix2d C = p.B * D[i];
             /// Matrix2d fp = Matrix2d::Identity() + dt*C;
             Matrix2d fp = Matrix2d::Identity() + dt*gradV;
@@ -1445,9 +1542,312 @@ void World::updateGradient() {
                 p.gradientE = tempGradE;
                 p.gradientP = Matrix2d::Identity();
             }
-            }
-        }}
+        }
     }
+}
+
+void World::velExtrapolate() {
+    #ifndef NDEBUG
+    int it = 15399;
+    if(stepNum > it) {
+        debug << "Step " << stepNum << "\n";
+        debug << "Vel:\n";
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                debug << "(";
+                if(velStar[i*res[1]+j](0) < 0) {
+                    debug << std::fixed << std::setprecision(5) << velStar[i*res[1]+j](0);
+                } 
+                else {
+                    debug << std::fixed << std::setprecision(6) << velStar[i*res[1]+j](0);
+                } 
+                debug << ",";
+                if(velStar[i*res[1]+j](1) < 0) {
+                    debug << std::fixed << std::setprecision(5) << velStar[i*res[1]+j](1);
+                }
+                else {
+                    debug << std::fixed << std::setprecision(6) << velStar[i*res[1]+j](1);
+                }
+                debug << ") ";
+            }
+            debug << "\n";
+        }
+        debug << "\n";
+    }
+    #endif
+    //Applying simple extrapolation method from https://github.com/christopherbatty/Fluid3D/blob/master/fluidsim.cpp
+    std::vector<char> oldValid;
+    oldValid.resize(res[0]*res[1]);
+    Vector2d *tmpVel = new Vector2d[res[0]*res[1]];
+    //Perform this a couple of times
+    for(int layer = 0; layer < 10; layer++) {
+        oldValid = valid;
+        /// #ifndef NDEBUG
+        /// debug << "Iter: " << layer << "\n";
+        /// #endif
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                int ind = i*res[1]+j;
+                int xp1 = (i+1)*res[1]+j;
+                int xm1 = (i-1)*res[1]+j;
+                int yp1 = i*res[1]+(j+1);
+                int ym1 = i*res[1]+(j-1);
+                /// #ifndef NDEBUG
+                /// debug << (int)oldValid[ind] << " ";
+                /// #endif
+                
+                Vector2d sum(0,0);
+                int count = 0;
+                
+                tmpVel[ind] = velStar[ind];
+                //Only check around cells that are not already valid
+                if(!oldValid[ind]) {
+                    if(i+1 < res[0] && oldValid[xp1]) {
+                        sum += velStar[xp1];
+                        count++;
+                    }
+                    if(i-1 >= 0 && oldValid[xm1]) {
+                        sum += velStar[xm1];
+                        count++;
+                    }
+                    if(j+1 < res[1] && oldValid[yp1]) {
+                        sum += velStar[yp1];
+                        count++;
+                    }
+                    if(j-1 >= 0 && oldValid[ym1]) {
+                        sum += velStar[ym1];
+                        count++;
+                    }
+                    
+                    //If neighboring cells were valid, average the values
+                    if(count > 0) {
+                        tmpVel[ind] = sum / count;
+                        valid[ind] = 1;
+                    }
+                }
+            }
+            /// #ifndef NDEBUG
+            /// debug << "\n";
+            /// #endif
+        }
+        /// #ifndef NDEBUG
+        /// debug << "\n";
+        /// #endif
+        //Replace grid with temp grid
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                velStar[i*res[1]+j] = tmpVel[i*res[1]+j];
+            }
+        }
+    }
+    #ifndef NDEBUG
+    if(stepNum > it) {
+        debug << "Extrapolated Vel:\n";
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                debug << "(";
+                if(velStar[i*res[1]+j](0) < 0) {
+                    debug << std::fixed << std::setprecision(5) << velStar[i*res[1]+j](0);
+                } 
+                else {
+                    debug << std::fixed << std::setprecision(6) << velStar[i*res[1]+j](0);
+                } 
+                debug << ",";
+                if(velStar[i*res[1]+j](1) < 0) {
+                    debug << std::fixed << std::setprecision(5) << velStar[i*res[1]+j](1);
+                }
+                else {
+                    debug << std::fixed << std::setprecision(6) << velStar[i*res[1]+j](1);
+                }
+                debug << ") ";
+            }
+            debug << "\n";
+        }
+        debug << "\n";
+    }
+    #endif
+    /// #ifndef NDEBUG
+    /// debug.close();
+    /// std::exit(1);
+    /// #endif
+    delete[] tmpVel;
+}
+
+void World::advect() {
+    Vector2d *newMat = new Vector2d[res[0]*res[1]];
+    //Advect material coordinates
+        //interpolate velocities at v[t] and v[t-dt] and average
+        //step back by that amount and interpolate material coordinates around that point
+    #ifndef NDEBUG
+    int it = 15399;
+    #endif
+    for(int i = 0; i < res[0]; i++) {
+        for(int j = 0; j < res[1]; j++) {
+            int index = i*res[1]+j;
+            Vector2d xg = origin + h*Vector2d(i,j);
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "i, j: " << i << " " << j << "\n";
+                debug << "xg: (" << xg(0) << ", " << xg(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            //v[t]
+            Vector2d v1 = velStar[index];
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "v1: (" << v1(0) << ", " << v1(1) << "\n";
+                debug.flush();
+            }
+            #endif
+            //step position back by dt
+            Vector2d ox = xg - dt*v1;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "ox: (" << ox(0) << ", " << ox(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            //v[t-dt]
+            Vector2d x = (ox - origin);
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "x: (" << x(0) << ", " << x(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d ij = x / h;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "ij: (" << ij(0) << ", " << ij(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            int i1 = (int)ij(0);
+            int i2 = i1+1;
+            int j1 = (int)ij(1);
+            int j2 = j1+1;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "i: [" << i1 << ", " << i2 << "]\n";
+                debug << "j: [" << j1 << ", " << j2 << "]\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d Q11 = prevVel[i1*res[1]+j1];
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "Q11: (" << Q11(0) << ", " << Q11(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d Q21 = prevVel[i2*res[1]+j1];
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "Q21: (" << Q21(0) << ", " << Q21(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d Q12 = prevVel[i1*res[1]+j2];
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "Q12: (" << Q12(0) << ", " << Q12(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d Q22 = prevVel[i2*res[1]+j2];
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "Q22: (" << Q22(0) << ", " << Q22(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            double x1 = h*i1;
+            double x2 = h*i2;
+            double y1 = h*j1;
+            double y2 = h*j2;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "x: [" << x1 << ", " << x2 << "]\n";
+                debug << "y: [" << y1 << ", " << y2 << "]\n";
+                debug.flush();
+            }
+            #endif
+            double xd1 = (x2-x(0))/(x2-x1);
+            double xd2 = (x(0)-x1)/(x2-x1);
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "xd: [" << xd1 << ", " << xd2 << "]\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d fy1 = xd1*Q11 + xd2*Q21;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "fy1: (" << fy1(0) << ", " << fy1(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d fy2 = xd1*Q12 + xd2*Q22;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "fy2: (" << fy2(0) << ", " << fy2(1) << ")\n";
+                debug.flush();
+            }
+            #endif
+            Vector2d v2 = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;    
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "v2: (" << v2(0) << ", " << v2(1) << ")\n";
+                debug.flush();
+            }
+            #endif    
+            //New Vel
+            Vector2d nv = (v1 + v2) / 2;
+            #ifndef NDEBUG
+            if(stepNum > it) {
+                debug << "nv: (" << nv(0) << ", " << nv(1) << ")\n\n";
+                debug.flush();
+            }
+            #endif
+                
+            //Step back and interpolate material coordinates
+            ox = xg - dt*nv;
+            x = (ox - origin);
+            ij = x / h;
+            i1 = (int)ij(0);
+            i2 = i1+1;
+            j1 = (int)ij(1);
+            j2 = j1+1;
+            Q11 = mat[i1*res[1]+j1];
+            Q21 = mat[i2*res[1]+j1];
+            Q12 = mat[i1*res[1]+j2];
+            Q22 = mat[i2*res[1]+j2];
+            x1 = h*i1;
+            x2 = h*i2;
+            y1 = h*j1;
+            y2 = h*j2;
+            xd1 = (x2-x(0))/(x2-x1);
+            xd2 = (x(0)-x1)/(x2-x1);
+            fy1 = xd1*Q11 + xd2*Q21;
+            fy2 = xd1*Q12 + xd2*Q22;
+            Vector2d nmat = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;   
+            newMat[index] = nmat;   
+        }
+    }
+    #ifndef NDEBUG
+    if(stepNum > it) {
+        debug << "\n\n";
+        debug.close();
+        std::exit(1);
+    }
+    #endif
+    for(int i = 0; i < res[0]; i++) {
+        for(int j = 0; j < res[1]; j++) {
+            mat[i*res[1]+j] = newMat[i*res[1]+j];
+        }
+    }
+    delete[] newMat;
 }
 
 /******************************
@@ -1472,18 +1872,16 @@ void World::gridToParticles() {
     for (unsigned int obj=0; obj<objects.size(); obj++) {
         std::vector<Particle> &particles = objects[obj].particles;
         MaterialProps &mp = objects[obj].mp;
-        {auto timer = prof.timeName("gtp Particles Loop"); 
         for(size_t i = 0; i < particles.size(); i++) {
             Particle &p = particles[i];
             //Update velocities
-            /// p.B = Matrix2d::Zero();
+            p.B = Matrix2d::Zero();
             Vector2d apic = Vector2d::Zero();
             Vector2d offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
             bounds(offset, res, xbounds, ybounds);
-            Matrix2d Bs, Be;
-            Bs = Matrix2d::Zero();
-            /// {auto timer = prof.timeName("gtp Bound Loop"); 
+            /// Matrix2d Bs, Be;
+            /// Bs = Matrix2d::Zero();
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 double w1 = weight(offset(0) - j);
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
@@ -1492,12 +1890,10 @@ void World::gridToParticles() {
                     Vector2d xg = origin + h*Vector2d(j, k);
                     Vector2d wvel = w * velStar[index];
                     apic += wvel;
-                    /// p.B += wvel * (xg - p.x).transpose();
-                    Bs += wvel * (xg - p.x).transpose();
+                    p.B += wvel * (xg - p.x).transpose();
+                    /// Bs += wvel * (xg - p.x).transpose();
                 }
             }
-            /// }
-            /// {auto timer = prof.timeName("gtp Vel and Position Update"); 
             #ifndef NDEBUG
             if(apic.hasNaN()) {
                 printf("\n\nAPIC Vel has NaN\n");
@@ -1505,60 +1901,72 @@ void World::gridToParticles() {
                 exit(0);
             }
             #endif
-            /// p.v = apic;
+            p.v = apic;
             //For testing, do RK2 (trapezoidal) time integration. Use bilinear(2D) interpolation for values
             //Bilinear for starting value
-            /// Vector2d x = (p.x - origin) / h;
-            /// int x1 = (int)x(0);
-            /// int x2 = x1+1;
-            /// int y1 = (int)x(1);
-            /// int y2 = y1+1;
-            /// Vector2d Q11 = velStar[x1*res[1]+y1];
-            /// Vector2d Q21 = velStar[x2*res[1]+y1];
-            /// Vector2d Q12 = velStar[x1*res[1]+y2];
-            /// Vector2d Q22 = velStar[x2*res[1]+y2];
+            /// Vector2d x = (p.x - origin);
+            /// Vector2d ij = x / h;
+            /// int i1 = (int)ij(0);
+            /// int i2 = i1+1;
+            /// int j1 = (int)ij(1);
+            /// int j2 = j1+1;
+            /// Vector2d Q11 = velStar[i1*res[1]+j1];
+            /// Vector2d Q21 = velStar[i2*res[1]+j1];
+            /// Vector2d Q12 = velStar[i1*res[1]+j2];
+            /// Vector2d Q22 = velStar[i2*res[1]+j2];
+            /// double x1 = h*i1;
+            /// double x2 = h*i2;
+            /// double y1 = h*j1;
+            /// double y2 = h*j2;
             /// double xd1 = (x2-x(0))/(x2-x1);
             /// double xd2 = (x(0)-x1)/(x2-x1);
             /// Vector2d fy1 = xd1*Q11 + xd2*Q21;
             /// Vector2d fy2 = xd1*Q12 + xd2*Q22;
             /// Vector2d vs = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;
-            Vector2d vs = apic;
-            //Do a temperary timestep for candidate position
-            Vector2d xn = p.x + dt * vs;
+            /// Vector2d vs = apic;
+            //Do a temperary timestep for candidate position (trying backwards)
+            /// Vector2d xn = p.x + dt * vs;
+            /// Vector2d xn = p.x - dt * vs;
             //Bilinear for ending value
-            /// x = (xn - origin) / h;
-            /// x1 = (int)x(0);
-            /// x2 = x1+1;
-            /// y1 = (int)x(1);
-            /// y2 = y1+1;
-            /// Q11 = velStar[x1*res[1]+y1];
-            /// Q21 = velStar[x2*res[1]+y1];
-            /// Q12 = velStar[x1*res[1]+y2];
-            /// Q22 = velStar[x2*res[1]+y2];
+            /// x = (xn - origin);
+            /// ij = x / h;
+            /// i1 = (int)ij(0);
+            /// i2 = i1+1;
+            /// j1 = (int)ij(1);
+            /// j2 = j1+1;
+            /// Q11 = prevVel[i1*res[1]+j1];
+            /// Q21 = prevVel[i2*res[1]+j1];
+            /// Q12 = prevVel[i1*res[1]+j2];
+            /// Q22 = prevVel[i2*res[1]+j2];
+            /// x1 = h*i1;
+            /// x2 = h*i2;
+            /// y1 = h*j1;
+            /// y2 = h*j2;
             /// xd1 = (x2-x(0))/(x2-x1);
             /// xd2 = (x(0)-x1)/(x2-x1);
             /// fy1 = xd1*Q11 + xd2*Q21;
             /// fy2 = xd1*Q12 + xd2*Q22;
             /// Vector2d ve = ((y2-x(1))/(y2-y1))*fy1 + ((x(1)-y1)/(y2-y1))*fy2;
-            apic = Vector2d::Zero();
-            offset = (xn - origin) / h;
-            bounds(offset, res, xbounds, ybounds);
-            Be = Matrix2d::Zero(); 
-            for(int j = xbounds[0]; j < xbounds[1]; j++) {
-                double w1 = weight(offset(0) - j);
-                for(int k = ybounds[0]; k < ybounds[1]; k++) {
-                    double w = w1*weight(offset(1) - k);
-                    int index = j*res[1] + k;
-                    Vector2d xg = origin + h*Vector2d(j, k);
-                    Vector2d wvel = w * velStar[index];
-                    apic += wvel;
-                    Be += wvel * (xg - xn).transpose();
-                }
-            }
-            Vector2d ve = apic;
+            
+            /// apic = Vector2d::Zero();
+            /// offset = (xn - origin) / h;
+            /// bounds(offset, res, xbounds, ybounds);
+            /// Be = Matrix2d::Zero(); 
+            /// for(int j = xbounds[0]; j < xbounds[1]; j++) {
+                /// double w1 = weight(offset(0) - j);
+                /// for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                    /// double w = w1*weight(offset(1) - k);
+                    /// int index = j*res[1] + k;
+                    /// Vector2d xg = origin + h*Vector2d(j, k);
+                    /// Vector2d wvel = w * prevVel[index];
+                    /// apic += wvel;
+                    /// Be += wvel * (xg - xn).transpose();
+                /// }
+            /// }
+            /// Vector2d ve = apic;
             //Average and set velocity to that
-            p.v = (vs + ve) / 2;
-            p.B = (Bs + Be) / 2;
+            /// p.v = (vs + ve) / 2;
+            /// p.B = (Bs + Be) / 2;
             //Mass proportional damping
             p.v = mp.massPropDamp * p.v;
             
@@ -1603,8 +2011,7 @@ void World::gridToParticles() {
                 p.x(1) = uy-EPS;
                 p.v(1) *= -1;
             }
-            /// }
-        }}
+        }
     }
 }
 

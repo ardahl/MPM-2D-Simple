@@ -74,6 +74,7 @@ public:
     double *mass;
     //No pressure projection, so no staggered grid needed
     Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
+    Eigen::Vector2d *prevVel;
     //Material coordinates
     Eigen::Vector2d *mat;
     Eigen::Matrix2d *stress;
@@ -100,6 +101,10 @@ public:
     void updateGridVelocities();            //Update_Grid_Velocities
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
+
+    std::vector<char> valid;
+    void velExtrapolate();
+    void advect();
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now

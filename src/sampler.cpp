@@ -12,7 +12,7 @@
 #include "range.hpp"
 
 #define RAND false
-#define JITTER
+/// #define JITTER
 
 #define CIRCLE true //could change to SQUARE, LINE
 
@@ -25,7 +25,8 @@ int main(int argc, char* argv[]) {
   // parameters of the object
   double size[2] = {0.25, 0.25};
   Vector2d object(0.0,0.5);
-  int ores[2] = {75,75};
+  /// int ores[2] = {75,75};
+  int ores[2] = {0,0};
   double pmass = 1.0;
   double rotation = 0.75;
   #if RAND
@@ -98,7 +99,8 @@ int main(int argc, char* argv[]) {
         Vector2d vel(1.0, 0.0);
         Particle par(pos, vel, col, pmass);
         Matrix2d B;
-        B << 0, -rotation, rotation, 0;
+        /// B << 0, -rotation, rotation, 0;
+        B << 1, 0, 0, 0;
         par.B = B;
 		parts.push_back(par);
 	  }
