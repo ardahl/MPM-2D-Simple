@@ -32,10 +32,6 @@ public:
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
-    #ifdef INFO
-    Eigen::Vector2d vold;
-    Eigen::Vector2d xo;
-    #endif
     
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
 	  B(Eigen::Matrix2d::Zero()), u(x), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
@@ -108,9 +104,9 @@ public:
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now
-    #ifdef INFO
-    std::ofstream polar;
-    std::ofstream kinetic;
+    #ifndef NDEBUG
+    Eigen::Vector2d **matTrans;
+    int count, sMax;
     #endif
 
   benlib::Profiler prof;

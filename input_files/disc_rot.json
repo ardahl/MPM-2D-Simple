@@ -17,7 +17,6 @@
 	},
  	"mass" : 1.0,
 	"lame" : [0, 1.0e4],
-	//"massPropDamp" : 0.99999999,
 	"massPropDamp" : 1.0,	
 	"gravity" : [0.0, 0.0]
 }
