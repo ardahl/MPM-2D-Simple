@@ -52,8 +52,7 @@ struct Object {
   double size[2];
   int ores[2];
   Eigen::Vector2d object, center;
-  std::vector<Particle> particles;
-  Eigen::Matrix2d *D;                   //B*Dinv is an approximation of gradV, so maybe store it for later
+  std::vector<Particle> particles;      //B*Dinv is an approximation of gradV, so maybe store it for later
   std::vector<Spring> springs;
 };
   

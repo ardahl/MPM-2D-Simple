@@ -7,7 +7,7 @@
 #include <iomanip>
 
 using namespace Eigen;
-/// #define SLOMO
+#define SLOMO
 
 #ifndef NDEBUG
 extern std::ofstream debug;
@@ -17,7 +17,7 @@ extern std::ofstream debug;
 //For slow motion, set start/end frame
 int startFrame = 0;
 int endFrame = 1;
-int slowmoSteps = 4000;
+int slowmoSteps = 20000;
 #endif
 
 int main(int argc, char** argv) {
