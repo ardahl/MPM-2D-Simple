@@ -29,10 +29,10 @@ int main(int argc, char* argv[]) {
     std::srand(std::time(0));
 
     // parameters of the object
-    double size[2] = {0.25, 0.25};  //radius of object in x, y directions
+    double size[2] = {0.15, 0.15};  //radius of object in x, y directions
     Vector2d object(0.0,0.5);       //position of the object center
     int ores[2] = {75,75};          //particle resolution for sampling
-    double pmass = 1.0;             //mass of each particle
+    double pmass = 0.001;             //mass of each particle
     double scale = 0.75;            //velocity scale
     #if RAND
     int numPart = 648;              //number of random particles in object

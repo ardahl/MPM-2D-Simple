@@ -5,17 +5,17 @@
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/disc_jitter.bgeo"
+			"filename" : "parts/disc_jitter_small.bgeo"
 		}
 	],
 	"grid" : {
-		"origin" : [-0.5, 0.0],
+		"origin" : [-0.3, 0.2],
 		//"size" : [40, 40],
 		//"h" : 0.025
 		"size" : [40, 40],
-		"h" : 0.025
+		"h" : 0.015
 	},
- 	"mass" : 1.0,
+ 	"mass" : 0.001,
 	//"lame" : [0, 1.0e2],
 	"lame" : [0, 1.0e4],
 	"massPropDamp" : 1.0,	

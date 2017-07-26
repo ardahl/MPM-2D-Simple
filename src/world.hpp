@@ -97,15 +97,19 @@ public:
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
 
+    //Semi-lagrangian advection
     std::vector<char> valid;
     void velExtrapolate();
-    void advect();
+    void slAdvect();
+    //Eulerian Advection
+    void eAdvect();
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now
     #ifndef NDEBUG
     Eigen::Vector2d **matTrans;
-    int count, sMax;
+    int count, sMax, inc;
+    std::vector<char> val;
     #endif
 
   benlib::Profiler prof;
