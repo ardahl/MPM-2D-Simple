@@ -425,11 +425,10 @@ inline void smoothField(Matrix2d* field, int iters, int res[2]) {
                     ym1 = j - 1;
                 }
                 //Using kernal:
-                //[0  1  0]
-                //[1 -4  1]
-                //[0  1  0]
-                /// tmpfield[i*res[1]+j] = (field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1] - 4*field[i*res[1]+j]) / (h*h);
-                tmpfield[i*res[1]+j] = field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1] - 4*field[i*res[1]+j];
+                //      [0 1 0]
+                //1/8 * [1 4 1]
+                //      [0 1 0]
+                tmpfield[i*res[1]+j] = 0.125*(field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1]) - 0.5*field[i*res[1]+j];
                 if(tmpfield[i*res[1]+j].hasNaN()) {
                     printf("Smooth Temp Field NaN\n");
                     std::cout << tmpfield[i*res[1]+j] << "\n";
@@ -456,6 +455,7 @@ inline void smoothField(Vector2d* field, int iters, int res[2]) {
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 //Extend kernal past end
+                //Using an extension edge case
                 if(i == res[0]-1) {
                     xp1 = i;
                 }
@@ -481,19 +481,18 @@ inline void smoothField(Vector2d* field, int iters, int res[2]) {
                     ym1 = j - 1;
                 }
                 //Using kernal:
-                //[0  1  0]
-                //[1 -4  1]
-                //[0  1  0]
-                /// tmpfield[i*res[1]+j] = (field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1] - 4*field[i*res[1]+j]) / (h*h);
-                tmpfield[i*res[1]+j] = field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1] - 4*field[i*res[1]+j];
+                //      [0 1 0]
+                //1/8 * [1 4 1]
+                //      [0 1 0]
+                tmpfield[i*res[1]+j] = 0.125*(field[xm1*res[1]+j] + field[xp1*res[1]+j] + field[i*res[1]+ym1] + field[i*res[1]+yp1]) + 0.5*field[i*res[1]+j];
                 if(tmpfield[i*res[1]+j].hasNaN()) {
                     printf("Smooth Temp Field NaN\n");
                     std::cout << tmpfield[i*res[1]+j] << "\n";
-                    std::cout << field[xm1*res[1]+j] << "\n";
-                    std::cout << field[xp1*res[1]+j] << "\n";
-                    std::cout << field[i*res[1]+ym1] << "\n";
-                    std::cout << field[i*res[1]+yp1] << "\n";
-                    std::cout << 4*field[i*res[1]+j] << "\n";
+                    std::cout << 0.125*field[xm1*res[1]+j] << "\n";
+                    std::cout << 0.125*field[xp1*res[1]+j] << "\n";
+                    std::cout << 0.125*field[i*res[1]+ym1] << "\n";
+                    std::cout << 0.125*field[i*res[1]+yp1] << "\n";
+                    std::cout << 0.5*field[i*res[1]+j] << "\n";
                     std::exit(1);
                 }
             }
