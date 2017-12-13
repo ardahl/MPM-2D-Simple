@@ -1,5 +1,5 @@
-#ifndef MATERIAL_HPP_
-#define MATERIAL_HPP_
+#ifndef WORLD_HPP_
+#define WORLD_HPP_
 
 #include <Eigen/Dense>
 #include "defines.hpp"

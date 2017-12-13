@@ -1,5 +1,5 @@
 #include "defines.hpp"
-#include "mpm.hpp"
+#include "eulerworld.hpp"
 #include "opengl.hpp"
 #include <iostream>
 #include <fstream>
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 	int iters = 0;
 
     if(argc < 2) {
-        std::cout << "Usage: ./mpm <configfile> [debug and video outputs name]\n";
+        std::cout << "Usage: ./euler <configfile> [debug and video outputs name]\n";
         std::exit(0);
     }
 	std::string outfile;
@@ -55,15 +55,15 @@ int main(int argc, char** argv) {
       if(frame >= startFrame && frame <= endFrame && iters % slowmoSteps == 0) {
       #endif
         for (unsigned int obj = 0; obj<world.objects.size(); obj++) {
-		  std::ostringstream ss;
+		  /// std::ostringstream ss;
           #ifndef SLOMO
-		  ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< frame;
+		  /// ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< frame;
           #else
-          ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< step;
+          /// ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< step;
 		  #endif
-          std::string pframe(ss.str());
-		  std::string parOut = outfile + "-" + pframe + ".bgeo";
-		  writeParticles(parOut.c_str(), world.objects[obj].particles);
+          /// std::string pframe(ss.str());
+		  /// std::string parOut = outfile + "-" + pframe + ".bgeo";
+		  /// writeParticles(parOut.c_str(), world.objects[obj].particles);
           step++;
           #ifndef SLOMO
 		  frame++;

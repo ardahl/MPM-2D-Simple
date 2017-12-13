@@ -393,32 +393,56 @@ inline Vector2d interpolate(Vector2d point, Vector2d* field, Vector2d origin, in
     return v;
 }
 
-inline void smoothField(Matrix2d* field, int iters, int res[2]) {
+inline void smoothField(Matrix2d* field, int iters, int res[2], std::vector<char> valid) {
     Matrix2d *tmpfield = new Matrix2d[res[0]*res[1]];
     int xp1, xm1, yp1, ym1;
     for(int s = 0; s < iters; s++) {
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 //Extend kernal past end
-                if(i == res[0]-1) {
+                /// if(i == res[0]-1) {
+                    /// xp1 = i;
+                /// }
+                /// else {
+                    /// xp1 = i + 1;
+                /// }
+                /// if(i == 0) {
+                    /// xm1 = i;
+                /// }
+                /// else {
+                    /// xm1 = i - 1;
+                /// }
+                /// if(j == res[1]-1) {
+                    /// yp1 = j;
+                /// }
+                /// else {
+                    /// yp1 = j + 1;
+                /// }
+                /// if(j == 0) {
+                    /// ym1 = j;
+                /// }
+                /// else {
+                    /// ym1 = j - 1;
+                /// }
+                if(i == res[0]-1 || (i < res[0]-1 && !valid[(i+1)*res[1]+j])) {
                     xp1 = i;
                 }
                 else {
                     xp1 = i + 1;
                 }
-                if(i == 0) {
+                if(i == 0 || (i > 0 && !valid[(i-1)*res[1]+j])) {
                     xm1 = i;
                 }
                 else {
                     xm1 = i - 1;
                 }
-                if(j == res[1]-1) {
+                if(j == res[1]-1 || (i < res[1]-1 && !valid[i*res[1]+(j+1)])) {
                     yp1 = j;
                 }
                 else {
                     yp1 = j + 1;
                 }
-                if(j == 0) {
+                if(j == 0 || (j > 0 && !valid[i*res[1]+(j-1)])) {
                     ym1 = j;
                 }
                 else {
@@ -448,7 +472,7 @@ inline void smoothField(Matrix2d* field, int iters, int res[2]) {
     delete[] tmpfield;
 }
 
-inline void smoothField(Vector2d* field, int iters, int res[2]) {
+inline void smoothField(Vector2d* field, int iters, int res[2], std::vector<char> valid) {
     Vector2d *tmpfield = new Vector2d[res[0]*res[1]];
     int xp1, xm1, yp1, ym1;
     for(int s = 0; s < iters; s++) {
@@ -456,25 +480,49 @@ inline void smoothField(Vector2d* field, int iters, int res[2]) {
             for(int j = 0; j < res[1]; j++) {
                 //Extend kernal past end
                 //Using an extension edge case
-                if(i == res[0]-1) {
+                /// if(i == res[0]-1) {
+                    /// xp1 = i;
+                /// }
+                /// else {
+                    /// xp1 = i + 1;
+                /// }
+                /// if(i == 0) {
+                    /// xm1 = i;
+                /// }
+                /// else {
+                    /// xm1 = i - 1;
+                /// }
+                /// if(j == res[1]-1) {
+                    /// yp1 = j;
+                /// }
+                /// else {
+                    /// yp1 = j + 1;
+                /// }
+                /// if(j == 0) {
+                    /// ym1 = j;
+                /// }
+                /// else {
+                    /// ym1 = j - 1;
+                /// }
+                if(i == res[0]-1 || (i < res[0]-1 && !valid[(i+1)*res[1]+j])) {
                     xp1 = i;
                 }
                 else {
                     xp1 = i + 1;
                 }
-                if(i == 0) {
+                if(i == 0 || (i > 0 && !valid[(i-1)*res[1]+j])) {
                     xm1 = i;
                 }
                 else {
                     xm1 = i - 1;
                 }
-                if(j == res[1]-1) {
+                if(j == res[1]-1 || (i < res[1]-1 && !valid[i*res[1]+(j+1)])) {
                     yp1 = j;
                 }
                 else {
                     yp1 = j + 1;
                 }
-                if(j == 0) {
+                if(j == 0 || (j > 0 && !valid[i*res[1]+(j-1)])) {
                     ym1 = j;
                 }
                 else {
@@ -1009,7 +1057,7 @@ void World::computeGridForces() {
             }
         }
         //Try smoothing stress field
-        /// smoothField(stress, 1, res);
+        /// smoothField(stress, 15, res, valid);
         
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
@@ -1141,6 +1189,9 @@ void World::computeGridForces() {
                 frc[i*res[1]+j] = force;
             }
         }
+        //Smooth Force
+        /// smoothField(frc, 15, res, valid);
+        
         #ifndef NDEBUG
         if(stepNum % inc == 0) {
             debug << "Valid\n";
@@ -1701,23 +1752,8 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
                 }
             }
         }
-        
-        /// printf("\nSweep %d\n", it+1);
-        /// for(int j = res[1]-1; j >= 0; j--) {
-            /// for(int i = 0; i < res[0]; i++) {
-                /// printf("%09.5f ", field[i*res[1]+j]);
-            /// }
-            /// printf("\n");
-        /// }
         it++;
     }
-    /// printf("\nSweep %d\n", it+1);
-    /// for(int j = res[1]-1; j >= 0; j--) {
-        /// for(int i = 0; i < res[0]; i++) {
-            /// printf("%09.5f ", field[i*res[1]+j]);
-        /// }
-        /// printf("\n");
-    /// }
 }
 inline void velExtrapolateFS(Vector2d *vel, double *field, std::vector<char> &valid, int res[2], int iters, double eps) {
     double err = 100;
@@ -1832,19 +1868,15 @@ inline void velExtrapolateFS(Vector2d *vel, double *field, std::vector<char> &va
                 vel[index] = vtmp;
             }
         }
-        /// printf("\nSweep %d\n", it+1);
-        /// for(int j = res[1]-1; j >= 0; j--) {
-            /// for(int i = 0; i < res[0]; i++) {
-                /// printf("(%09.5f,%09.5f) ", vel[i*res[1]+j](0), vel[i*res[1]+j](1));
-            /// }
-            /// printf("\n");
-        /// }
         it++;
     }
     valid = newvalid;
 }
 
 void World::velExtrapolate() {
+    //Pre-extended Velocity Smooth
+    /// smoothField(velStar, 15, res, valid);
+    
     #ifndef NDEBUG    
     if(stepNum % inc == 0) {       
         val = valid;  
@@ -1975,7 +2007,9 @@ void World::velExtrapolate() {
     fastSweep(phi, valid, h, res, 20, 1e-9);
     velExtrapolateFS(velStar, phi, valid, res, 20, 1e-9);
 #endif
-
+    //Post-extended Velocity Smooth
+    /// smoothField(velStar, 15, res, valid);
+    
     #ifndef NDEBUG    
     if(stepNum % inc == 0) {         
         std::string name = std::string("velfield-") + std::to_string(stepNum/inc);         
@@ -2069,6 +2103,10 @@ void World::eAdvect() {
             if(!valid[index]) {
                 continue;
             }
+            /// double stab = dt*std::max(std::abs(velStar[index](0))/h, std::abs(velStar[index](1)/h));
+            /// if(stab >= 1.0) {
+                /// std::cout << stab << " " << i << ", " << j << "\n";
+            /// }
             int xp1 = (i+1)*res[1]+j;
             int xm1 = (i-1)*res[1]+j;
             int yp1 = i*res[1]+(j+1);
@@ -2354,10 +2392,6 @@ void World::eAdvect() {
             
             Matrix2d D;
             D << xx, xy, yx, yy;
-            //TODO: Jacobian of rotation field should be like:
-            //          [0 -r]
-            //          [r  0]
-            //Check this
             #ifndef NDEBUG
             if(stepNum % inc == 0) {
                 debug << D << "\n";
@@ -2384,6 +2418,8 @@ void World::eAdvect() {
             mat[index] = newMat;
         }
     }
+    //Mat Smoothing
+    /// smoothField(mat, 15, res, valid);
 }
 
 /******************************

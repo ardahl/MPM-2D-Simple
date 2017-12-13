@@ -1,0 +1,27 @@
+{
+	//500,000
+	//"dt" : 6.66666667e-8,
+	"steps" : 500000,	
+	"totalTime" : 3,
+	//Not actually used, but particles might be needed for visualization so they're staying for now
+	"objects" : [
+		{
+			"type" : "parts",
+			"filename" : "parts/disc_jitter.bgeo"
+		}
+	],
+	"grid" : {
+		//.15 x .15 - ~6in x 6in
+		//.6 x .6 ~ 2ft x 2ft
+		//.3048 x .3048 ~ 1ft x 1ft
+		"origin" : [-0.3, 0],
+		"size" : [64, 64],
+		//"h" : 0.015,
+		"end" : [0.3, 0.6]
+	},
+ 	"mass" : 1.0,
+	"lame" : [0, 0],
+	"massPropDamp" : 1.0	
+	//"gravity" : [0.0, -9.8]
+	//"rotate" : 0.05
+}

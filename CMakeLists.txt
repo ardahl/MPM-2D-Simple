@@ -128,3 +128,13 @@ if(SAMPLER)
     target_link_libraries(sampler mpmlib ${PARTIO_LIBRARY} ${ZLIB})
 endif(SAMPLER)
 
+
+#Solid Euler Simulation
+set (SRC_EULER
+	${SRC}/eulerworld.cpp
+	${SRC}/jsoncpp.cpp
+)
+add_library(eulerlib ${SRC_EULER})
+
+add_executable(euler ${SRC}/eulermain.cpp)
+target_link_libraries(euler eulerlib ${PARTIO_LIBRARY} ${ZLIB})
