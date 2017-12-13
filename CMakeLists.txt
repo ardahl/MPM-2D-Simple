@@ -55,6 +55,11 @@ endif()
 
 #set(PARTIO_LIBRARY "partio -L/usr/local/lib")
 find_library(PARTIO_LIBRARY partio)
+if(NOT PARTIO_LIBRARY)
+    message(FATAL_ERROR "Partio Not Found! Exiting...")
+else(NOT PARTIO_LIBRARY)
+    message(STATUS "Partio located at ${PARTIO_LIBRARY}")
+endif(NOT PARTIO_LIBRARY)
 #zlib library
 set(ZLIB "z")
 
