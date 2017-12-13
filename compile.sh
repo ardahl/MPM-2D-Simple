@@ -17,5 +17,5 @@ then
     export CXX=/usr/local/bin/g++-7
 fi
 cmake -Wno-dev -DCMAKE_PREFIX_PATH=/usr/local/ "$BUILD_TYPE" ..
-make VERBOSE=1
+make
 cd ..
