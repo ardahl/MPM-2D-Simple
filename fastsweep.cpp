@@ -64,7 +64,7 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 //[(x-a)+]^2 + [(x-b)+]^2 = f^2 * h^2
                 //a = u_xmin
                 //b = u_ymin
@@ -87,7 +87,7 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
                 else {
                     b = std::min(field[yp1], field[ym1]);
                 }
-                
+
                 double f = 1;
                 double fh = f*h;            //Seeing what happens with f=1
                 //Eq 2.4
@@ -99,10 +99,10 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
                 else {
                     xbar = (a+b+std::sqrt(2*f*f*h*h-ab*ab)) / 2;
                 }
-                
+
                 double prevVal = field[index];
                 field[index] = std::min(field[index], xbar);
-                
+
                 //Keep the max change
                 double currDif = prevVal - field[index];
                 if(currDif > err) {
@@ -110,7 +110,7 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
                 }
             }
         }
-        
+
         printf("\nSweep %d\n", it+1);
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
@@ -174,7 +174,7 @@ inline void fastSweep(Vector2d *field, std::vector<char> valid, double h, int re
                     int xm1 = (i-1)*res[1]+j;
                     int yp1 = i*res[1]+(j+1);
                     int ym1 = i*res[1]+(j-1);
-                    
+
                     //[(x-a)+]^2 + [(x-b)+]^2 = f^2 * h^2
                     //a = u_xmin
                     //b = u_ymin
@@ -197,7 +197,7 @@ inline void fastSweep(Vector2d *field, std::vector<char> valid, double h, int re
                     else {
                         b = std::min(field[yp1](dim), field[ym1](dim));
                     }
-                    
+
                     double f = 1;
                     double fh = f*h;            //Seeing what happens with f=1
                     //Eq 2.4
@@ -209,10 +209,10 @@ inline void fastSweep(Vector2d *field, std::vector<char> valid, double h, int re
                     else {
                         xbar = (a+b+std::sqrt(2*f*f*h*h-ab*ab)) / 2;
                     }
-                    
+
                     double prevVal = field[index](dim);
                     field[index](dim) = std::min(field[index](dim), xbar);
-                    
+
                     //Keep the max change
                     double currDif = prevVal - field[index](dim);
                     if(currDif > err) {
@@ -220,7 +220,7 @@ inline void fastSweep(Vector2d *field, std::vector<char> valid, double h, int re
                     }
                 }
             }
-            
+
             printf("\nSweep %d, Dim %d\n", it+1, dim);
             for(int j = res[1]-1; j >= 0; j--) {
                 for(int i = 0; i < res[0]; i++) {
@@ -245,7 +245,7 @@ inline void velExtrapolateFM(Vector2d *vel, double *field, std::vector<char> val
         }
     }
     std::sort(sortedphi.begin(), sortedphi.end());
-    
+
     //Go through array, calculating new velocity for each element
     std::vector<std::tuple<double,int,int>>::iterator it;
     bool d1, d2;
@@ -261,7 +261,7 @@ inline void velExtrapolateFM(Vector2d *vel, double *field, std::vector<char> val
         int xm1 = (x-1)*res[1]+y;
         int yp1 = x*res[1]+(y+1);
         int ym1 = x*res[1]+(y-1);
-        
+
         //Look in x direction
         if(x != 0 && field[xm1] < phi) {
             phi1 = field[xm1];
@@ -272,10 +272,10 @@ inline void velExtrapolateFM(Vector2d *vel, double *field, std::vector<char> val
             if((d1 && field[xp1] < phi1) || !d1) {
                 phi1 = field[xp1];
                 d1 = true;
-                x1 = vel[xp1];                
+                x1 = vel[xp1];
             }
         }
-        
+
         //look in y direction
         if(y != 0 && field[ym1] < phi) {
             phi2 = field[ym1];
@@ -286,10 +286,10 @@ inline void velExtrapolateFM(Vector2d *vel, double *field, std::vector<char> val
             if((d2 && field[yp1] < phi2) || !d2) {
                 phi2 = field[yp1];
                 d2 = true;
-                x2 = vel[yp1];                
+                x2 = vel[yp1];
             }
         }
-        
+
         //Compute average value
         if(d1 && d2) {
             vel[index] = (x1*(phi-phi1)+x2*(phi-phi2)) / (2*phi-phi1-phi2);
@@ -357,7 +357,7 @@ inline void velExtrapolateFS(Vector2d *vel, double *field, std::vector<char> val
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 //(Fxmin*(phix-phixmin) + Fymin*(phix-phiymin)) / ((phix-phixmin) + (phix-phiymin))
                 double a, b;
                 Vector2d vi, vj;
@@ -397,7 +397,7 @@ inline void velExtrapolateFS(Vector2d *vel, double *field, std::vector<char> val
                         vj = vel[ym1];
                     }
                 }
-                
+
                 //If neither values are less than x_ij then the contribution is 0
                 double phixi = 0, phixj = 0;
                 if(field[index] > a) {
@@ -443,10 +443,10 @@ inline void velExtrapolateAve(Vector2d* vel, std::vector<char> valid, int res[2]
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 Vector2d sum(0,0);
                 int count = 0;
-                
+
                 tmpVel[ind] = vel[ind];
                 //Only check around cells that are not already valid
                 if(!oldValid[ind]) {
@@ -482,7 +482,7 @@ inline void velExtrapolateAve(Vector2d* vel, std::vector<char> valid, int res[2]
                         sum += vel[(i-1)*res[1]+(j-1)];
                         count++;
                     }
-                    
+
                     //If neighboring cells were valid, average the values
                     if(count > 0) {
                         tmpVel[ind] = sum / count;
@@ -503,7 +503,7 @@ inline void velExtrapolateAve(Vector2d* vel, std::vector<char> valid, int res[2]
                 vel[i*res[1]+j] = tmpVel[i*res[1]+j];
             }
         }
-        
+
         printf("\nSweep %d\n", it+1);
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
@@ -526,7 +526,7 @@ inline void matExtrapolateFM(Vector2d* mats, double *phi, std::vector<char>& val
         }
     }
     std::sort(sortedphi.begin(), sortedphi.end());
-    
+
     //Go through array, calculating new velocity for each element
     std::vector<std::tuple<double,int,int>>::iterator it;
 	double xh = 0, yh = 0;
@@ -539,7 +539,7 @@ inline void matExtrapolateFM(Vector2d* mats, double *phi, std::vector<char>& val
         int xm1 = (x-1)*res[1]+y;
         int yp1 = x*res[1]+(y+1);
         int ym1 = x*res[1]+(y-1);
-        
+
         //Look in x direction
         if(x < res[0]-1 && valid[xp1]) {	//right valid, -h
 			xh = -h;
@@ -553,7 +553,7 @@ inline void matExtrapolateFM(Vector2d* mats, double *phi, std::vector<char>& val
 			xh = 0;
 			xm = Vector2d::Zero();
 		}
-        
+
         //look in y direction
         if(y < res[1]-1 && valid[yp1]) {	//right valid, -h
 			yh = -h;
@@ -567,7 +567,7 @@ inline void matExtrapolateFM(Vector2d* mats, double *phi, std::vector<char>& val
 			yh = 0;
 			ym = Vector2d::Zero();
 		}
-		
+
 		//If one direction is empty, we want to keep the value from the other direction
 		if(xh == 0 && yh != 0) {
 			xm = ym;
@@ -634,7 +634,7 @@ inline void matExtrapolateFS(Vector2d *mats, double *phi, Matrix2d F, std::vecto
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 //Look towards the object, direction with smallest phi
                 double p = phi[index];
                 double phix = p, phiy = p;
@@ -695,6 +695,7 @@ inline void matExtrapolateFS(Vector2d *mats, double *phi, Matrix2d F, std::vecto
 }
 
 inline Matrix2d upwindJac(Vector2d* field, Vector2d* vel, int i, int j, std::vector<char> valid, double h, int res[2], bool boundary = true) {
+    //TODO: Points inside the object don't look outside and points outside dont look inside
     //Compute D(field) with upwinding scheme
     int index = i*res[1]+j;
     int xp1 = (i+1)*res[1]+j;
@@ -717,26 +718,26 @@ inline Matrix2d upwindJac(Vector2d* field, Vector2d* vel, int i, int j, std::vec
 		if(i == di && j == dj) {
 			printf("Look X -1\n");
 		}
-        if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {  //Looking backwards in x and valid value
+        if((i != 0) && (((boundary && valid[index] && valid[xm1]) || !boundary) || ((boundary && !valid[index] && !valid[xm1]) || !boundary))) {  //Looking backwards in x and valid value
 			xx = (field[index](0) - field[xm1](0)) / h;
 			if(i == di && j == dj) {
 				printf("xx1: (%f - %f) / %f = %f\n", field[index](0), field[xm1](0), h, xx);
 			}
         }
-        else if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)){  //Can't look backwards in x so do forward difference instead
+        else if((i != res[0]-1) && (((boundary && valid[index] && valid[xp1]) || !boundary) || ((boundary && !valid[index] && !valid[xp1]) || !boundary))) {  //Can't look backwards in x so do forward difference instead
 			xx = (field[xp1](0) - field[index](0)) / h;
 			if(i == di && j == dj) {
 				printf("xx2: (%f - %f) / %f = %f\n", field[xp1](0), field[index](0), h, xx);
 			}
         }
-        
-        if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {  //Looking backwards in y and valid value
+
+        if((j != 0) && (((boundary && valid[index] && valid[ym1]) || !boundary) || ((boundary && !valid[index] && !valid[ym1]) || !boundary))) {  //Looking backwards in y and valid value
 			xy = (field[index](0) - field[ym1](0)) / h;
 			if(i == di && j == dj) {
 				printf("xy1: (%f - %f) / %f = %f\n", field[index](0), field[ym1](0), h, xy);
 			}
         }
-        else if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {  //Can't look backwards in y so do forward difference instead
+        else if((j != res[1]-1) && (((boundary && valid[index] && valid[yp1]) || !boundary) || ((boundary && !valid[index] && !valid[yp1]) || !boundary))) {  //Can't look backwards in y so do forward difference instead
 			xy = (field[yp1](0) - field[index](0)) / h;
 			if(i == di && j == dj) {
 				printf("xy2: (%f - %f) / %f = %f\n", field[yp1](0), field[index](0), h, xy);
@@ -747,26 +748,26 @@ inline Matrix2d upwindJac(Vector2d* field, Vector2d* vel, int i, int j, std::vec
 		if(i == di && j == dj) {
 			printf("Look X +1\n");
 		}
-        if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
+        if((i != res[0]-1) && (((boundary && valid[index] && valid[xp1]) || !boundary) || ((boundary && !valid[index] && !valid[xp1]) || !boundary))) {
 			xx = (field[xp1](0) - field[index](0)) / h;
 			if(i == di && j == dj) {
 				printf("xx3: (%f - %f) / %f = %f\n", field[xp1](0), field[index](0), h, xx);
 			}
         }
-        else if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
+        else if((i != 0) && (((boundary && valid[index] && valid[xm1]) || !boundary) || ((boundary && !valid[index] && !valid[xm1]) || !boundary))) {
 			xx = (field[index](0) - field[xm1](0)) / h;
 			if(i == di && j == dj) {
 				printf("xx4: (%f - %f) / %f = %f\n", field[index](0), field[xm1](0), h, xx);
 			}
         }
-        
-        if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
+
+        if((j != res[1]-1) && (((boundary && valid[index] && valid[yp1]) || !boundary) || ((boundary && !valid[index] && !valid[yp1]) || !boundary))) {
 			xy = (field[yp1](0) - field[index](0)) / h;
 			if(i == di && j == dj) {
 				printf("xy3: (%f - %f) / %f = %f\n", field[yp1](0), field[index](0), h, xy);
 			}
         }
-        else if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
+        else if((j != 0) && (((boundary && valid[index] && valid[ym1]) || !boundary) || ((boundary && !valid[index] && !valid[ym1]) || !boundary))) {
 			xy = (field[index](0) - field[ym1](0)) / h;
 			if(i == di && j == dj) {
 				printf("xy4: (%f - %f) / %f = %f\n", field[index](0), field[ym1](0), h, xy);
@@ -777,26 +778,26 @@ inline Matrix2d upwindJac(Vector2d* field, Vector2d* vel, int i, int j, std::vec
 		if(i == di && j == dj) {
 			printf("Look Y -1\n");
 		}
-        if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
+        if((i != 0) && (((boundary && valid[index] && valid[xm1]) || !boundary) || ((boundary && !valid[index] && !valid[xm1]) || !boundary))) {
 			yx = (field[index](1) - field[xm1](1)) / h;
 			if(i == di && j == dj) {
 				printf("yx1: (%f - %f) / %f = %f\n", field[index](1), field[xm1](1), h, yx);
 			}
         }
-        else if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
+        else if((i != res[0]-1) && (((boundary && valid[index] && valid[xp1]) || !boundary) || ((boundary && !valid[index] && !valid[xp1]) || !boundary))) {
 			yx = (field[xp1](1) - field[index](1)) / h;
 			if(i == di && j == dj) {
 				printf("yx2: (%f - %f) / %f = %f\n", field[xp1](1), field[index](1), h, yx);
 			}
         }
-        
-        if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
+
+        if((j != 0) && (((boundary && valid[index] && valid[ym1]) || !boundary) || ((boundary && !valid[index] && !valid[ym1]) || !boundary))) {
 			yy = (field[index](1) - field[ym1](1)) / h;
 			if(i == di && j == dj) {
 				printf("yy1: (%f - %f) / %f = %f\n", field[index](1), field[ym1](1), h, yy);
 			}
         }
-        else if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
+        else if((j != res[1]-1) && (((boundary && valid[index] && valid[yp1]) || !boundary) || ((boundary && !valid[index] && !valid[yp1]) || !boundary))) {
 			yy = (field[yp1](1) - field[index](1)) / h;
 			if(i == di && j == dj) {
 				printf("yy2: (%f - %f) / %f = %f\n", field[yp1](1), field[index](1), h, yy);
@@ -807,26 +808,26 @@ inline Matrix2d upwindJac(Vector2d* field, Vector2d* vel, int i, int j, std::vec
 		if(i == di && j == dj) {
 			printf("Look Y +1\n");
 		}
-        if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
+        if((i != res[0]-1) && (((boundary && valid[index] && valid[xp1]) || !boundary) || ((boundary && !valid[index] && !valid[xp1]) || !boundary))) {
 			yx = (field[xp1](1) - field[index](1)) / h;
 			if(i == di && j == dj) {
 				printf("yx3: (%f - %f) / %f = %f\n", field[xp1](1), field[index](1), h, yx);
 			}
         }
-        else if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
+        else if((i != 0) && (((boundary && valid[index] && valid[xm1]) || !boundary) || ((boundary && !valid[index] && !valid[xm1]) || !boundary))) {
 			yx = (field[index](1) - field[xm1](1)) / h;
 			if(i == di && j == dj) {
 				printf("yx4: (%f - %f) / %f = %f\n", field[index](1), field[xm1](1), h, yx);
 			}
         }
-        
-        if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
+
+        if((j != res[1]-1) && (((boundary && valid[index] && valid[yp1]) || !boundary) || ((boundary && !valid[index] && !valid[yp1]) || !boundary))) {
 			yy = (field[yp1](1) - field[index](1)) / h;
 			if(i == di && j == dj) {
 				printf("yy3: (%f - %f) / %f = %f\n", field[yp1](1), field[index](1), h, yy);
-			}	
+			}
         }
-        else if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
+        else if((j != 0) && (((boundary && valid[index] && valid[ym1]) || !boundary) || ((boundary && !valid[index] && !valid[ym1]) || !boundary))) {
 			yy = (field[index](1) - field[ym1](1)) / h;
 			if(i == di && j == dj) {
 				printf("yy4: (%f - %f) / %f = %f\n", field[index](1), field[ym1](1), h, yy);
@@ -843,7 +844,7 @@ int main(int argc, char** argv) {
     Vector2d origin(-7.5, 0);
     double h = 1;
     Vector2d center = origin + h*Vector2d(res[0]-1, res[1]-1)/2.0;
-    
+
     Vector2d *material = new Vector2d[res[0]*res[1]];
     Vector2d *field = new Vector2d[res[0]*res[1]];
     Vector2d *velExact = new Vector2d[res[0]*res[1]];
@@ -882,7 +883,7 @@ int main(int argc, char** argv) {
 			}
 		}
 	}
-	
+
 	std::vector<char> validcpy = valid;
 	matExtrapolateFM(material, distExact, valid, h, res);
 	/// Rotation2D<double> rot(-0.785398);
@@ -890,6 +891,9 @@ int main(int argc, char** argv) {
 	std::ofstream matout("material");
 	printf("Material Field:\n");
 	double err = 0;
+    double maxd = 0;
+    Vector2d md1, md2;
+    int mi, mj, mi2, mj2;
 	for(int j = res[1]-1; j >= 0; j--) {
 		for(int i = 0; i < res[0]; i++) {
 			int ind = i*res[1]+j;
@@ -913,12 +917,67 @@ int main(int argc, char** argv) {
 			if(diff > err) {
 				err = diff;
 			}
+            if(i != res[0]-1) {
+                Vector2d mtmp = material[(i+1)*res[1]+j];
+                diff = (m-mtmp).norm();
+                if(diff > maxd) {
+                    maxd = diff;
+                    mi = i;
+                    mj = j;
+                    mi2 = i+1;
+                    mj2 = j;
+                    md1 = m;
+                    md2 = mtmp;
+                }
+            }
+            if(i != 0) {
+                Vector2d mtmp = material[(i-1)*res[1]+j];
+                diff = (m-mtmp).norm();
+                if(diff > maxd) {
+                    maxd = diff;
+                    mi = i;
+                    mj = j;
+                    mi2 = i-1;
+                    mj2 = j;
+                    md1 = m;
+                    md2 = mtmp;
+                }
+            }
+            if(j != res[1]-1) {
+                Vector2d mtmp = material[i*res[1]+(j+1)];
+                diff = (m-mtmp).norm();
+                if(diff > maxd) {
+                    maxd = diff;
+                    mi = i;
+                    mj = j;
+                    mi2 = i;
+                    mj2 = j+1;
+                    md1 = m;
+                    md2 = mtmp;
+                }
+            }
+            if(j != 0) {
+                Vector2d mtmp = material[i*res[1]+(j-1)];
+                diff = (m-mtmp).norm();
+                if(diff > maxd) {
+                    maxd = diff;
+                    mi = i;
+                    mj = j;
+                    mi2 = i;
+                    mj2 = j-1;
+                    md1 = m;
+                    md2 = mtmp;
+                }
+            }
 		}
 		printf("\n");
 	}
 	printf("Max Error: %f\n", err);
 	matout.close();
-	
+    printf("Max Dist: %f\n", maxd);
+    printf("%d, %d: (%f, %f)\n", mi, mj, md1(0), md1(1));
+    printf("%d, %d: (%f, %f)\n", mi2, mj2, md2(0), md2(1));
+
 	std::ofstream debug("fsmat");
 	debug << "\nDX: \n";
 	for(int j = res[1]-2; j >= 0; j--) {
@@ -947,8 +1006,8 @@ int main(int argc, char** argv) {
 	}
 	debug << "\n";
 	debug.close();
-    std::exit(0);   
-	
+    std::exit(0);
+
     std::vector<char> tmpvalid = valid;
     /// for(int i = 0; i < res[0]; i++) {
 		/// for(int j = 0; j < res[1]; j++) {
@@ -960,7 +1019,7 @@ int main(int argc, char** argv) {
 			/// int xm1 = (i-1)*res[1]+j;
 			/// int yp1 = i*res[1]+(j+1);
 			/// int ym1 = i*res[1]+(j-1);
-			/// if((i != res[0]-1 && valid[xp1]) || (i != 0 && valid[xm1]) || 
+			/// if((i != res[0]-1 && valid[xp1]) || (i != 0 && valid[xm1]) ||
 			   /// (j != res[1]-1 && valid[yp1]) || (j != 0 && valid[ym1])) {
 				/// Vector2d p = origin+h*Vector2d(i, j);
 				/// double d = (p-center).norm() - rad;
@@ -969,7 +1028,7 @@ int main(int argc, char** argv) {
 			/// }
 		/// }
     /// }
-    
+
     printf("Velocity Field\n");
     for(int j = res[1]-1; j >= 0; j--) {
         for(int i = 0; i < res[0]; i++) {
@@ -985,7 +1044,7 @@ int main(int argc, char** argv) {
         printf("\n");
     }
     /// std::exit(0);
-    
+
     printf("\n\n");
     printf("----------------\n");
     printf("Distance Field\n");
@@ -998,7 +1057,7 @@ int main(int argc, char** argv) {
         }
         printf("\n");
     }
-    
+
     printf("\n\n");
     printf("----------------\n");
     printf("Velocity Field\n");
@@ -1014,7 +1073,7 @@ int main(int argc, char** argv) {
         }
         printf("\n");
     }
-   
+
     std::ofstream diff("veldiff.txt");
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
@@ -1026,6 +1085,6 @@ int main(int argc, char** argv) {
             }
         }
     }
-    
+
     return 0;
 }
