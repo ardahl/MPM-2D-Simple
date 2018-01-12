@@ -9,7 +9,8 @@
 #ifndef DEFINES_HPP_
 #define DEFINES_HPP_
 
-#include <cmath>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #define MAT_TRANSFER
 
@@ -18,13 +19,27 @@
 /// in which case it will need to move. But for now it'll rest here.
 const double EPS = 5e-7;
 
-/// For the weight function, it is only close to 0 when 1<x<2. Solving that 
-/// for x when it equals the epsilon value gives -+2 +- 6^(1/3)*EPS^(1/3). 
-/// Substituting in pos/h - i for x and solving for i gives us the upper and
-/// lower bounds where anything past them is less than epsilon.  
-/// Cube root of 6 times cube root of our epsilon.
-/// const double BOUNDOFFSET = 1.81712059283 * cbrt(EPS);
-/// const double BOUNDLOWER = -2 + BOUNDOFFSET;
-/// const double BOUNDUPPER = 2 - BOUNDOFFSET;
+// Typedefs for Eigen
+// This allows for easier swaping of framework and dimention number
+#define DIM 2
+#if DIM == 2
+typedef Eigen::Vector2d VectorN;
+typedef Eigen::Vector2i VectorI;
+typedef Eigen::Matrix2d MatrixN;
+typedef Eigen::Array2d ArrayN;
+#define QUAD 4                     //number of quadrature points
+#else
+typedef Eigen::Vector3d VectorN;
+typedef Eigen::Vector3i VectorI;
+typedef Eigen::Matrix3d MatrixN;
+typedef Eigen::Array3d ArrayN;
+#define QUAD 8
+#endif
+
+typedef Eigen::VectorXd VectorX;
+typedef Eigen::MatrixXd MatrixX;
+typedef Eigen::ArrayXd ArrayX;
+typedef Eigen::SparseMatrix<double, Eigen::RowMajor> SparseMat;
+typedef Eigen::Triplet<double> ETriplet;
 
 #endif

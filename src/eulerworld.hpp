@@ -1,7 +1,6 @@
 #ifndef EULERIAN_HPP_
 #define EULERIAN_HPP_
 
-#include <Eigen/Dense>
 #include "defines.hpp"
 #include <vector>
 #include <algorithm>
@@ -14,7 +13,7 @@ class Particle {
 public:
     //Temp
     Eigen::Matrix2d B;         //B matrix from APIC paper
-    
+
     Eigen::Vector2d u;        //Initial position (rest state)
     Eigen::Vector2d x, v;      //postition, velocity
     #ifndef NDEBUG
@@ -23,12 +22,12 @@ public:
     Eigen::Vector3d color;
     Eigen::Vector3d c1, c2;
     Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
-    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
+    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
-    
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
+
+    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m):
 	  B(Eigen::Matrix2d::Zero()), u(x), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
@@ -49,7 +48,7 @@ struct Object {
     Eigen::Vector2d object, center;
     std::vector<Particle> particles;
 };
-  
+
 
 class World {
 public:
@@ -57,30 +56,74 @@ public:
     double elapsedTime, dt, totalTime;
     std::string filename;
     Eigen::Vector2d origin;                 //lower left node position
-    int res[2];                             //Grid node dimensions
+    int res[DIM];                             //Grid node dimensions
     double h;                               //Grid node spacing
-    //Structures used for calculations
-    double *mass, *phi;
-    //dXx and dXy are staggered by 1. Stress is staggered inside by 1
-    Eigen::Vector2d *vel, *tau, *mat, *dXx, *dXy;   //grid velocity, traction forces, material coordinates, derivatives of X
-    Eigen::Matrix2d *stress, *F;                    //Stress and Deformation Gradient
-    //Meta info for mass
-    int numNodesMass;               //Number of nodes with non 0 mass
-    Eigen::VectorXd interpMass;
-    Eigen::VectorXd Fstar;          //Force on right side of system to solve
-    std::vector<char> valid, cvalid;
-    //Color for Rendering
-    Eigen::Vector3d *color;
-    Eigen::VectorXi interpColor;
-    
-    // particle object
+    VectorI tightMax;
+    VectorI tightMin;
+    int xmin, xmax;
+    int ymin, ymax;
     std::vector<Object> objects;
-    
+
+    std::vector<double> restMass;
+    int offsets[QUAD];
+    MatrixX G;
+    //Structures used for calculations
+    int totalCells;
+    int totalSolidCells;
+    int totalActiveCells;
+    std::vector<VectorN> X;                 //material coordinates
+    std::vector<VectorN> u;                 //displacements of each coordinate to their current location
+    std::vector<double> mass;
+    std::vector<VectorN> velocity;
+    std::vector<char> valid;
+    std::vector<VectorN> vecWorkspace;
+    std::vector<double> phi;
+    std::vector<double> detFInv;
+    double subsampleDh;
+    double quarterCellSolidMass;
+    VectorX vStar;                           //updated velocity from forces solve
+    VectorX mv;
+    VectorX solidMv;
+    VectorX unitForce;
+    VectorX solidUnitForce;
+    VectorX nzMassVec;
+    VectorX nzMassVecInv;
+    VectorX dampedMass;
+    std::vector<int> gridToSolution;
+    std::vector<int> gridToSolid;
+    std::vector<ETriplet> tripletList;
+    double mu;
+    double lambda;
+    double rayleighAlpha;
+    double rayleighBeta;
+    VectorX quarterVolumeFractions;
+    std::vector<double> nodeSolidVolumeFraction;
+    //From SVD of F
+    //These are all used at the same time and nowhere else, no need for an array
+    MatrixN R;
+    MatrixN S;
+    MatrixN L;
+    MatrixN U;
+    MatrixN Fhat;
+    MatrixN V;
+    SparseMat systemMat;
+    VectorX systemMatDiag;
+
+    //Color for Rendering
+    std::vector<Eigen::Vector3d> color;
+
     // external forces
-    Eigen::Vector2d gravity;
+    VectorN gravity;
     double rotation;
     bool rotationEnabled, gravityEnabled, plasticEnabled;
-    Eigen::Vector2d center;
+    VectorN center;
+
+    #ifndef NDEBUG
+    VectorN **matTrans;
+    int count, sMax;
+    std::vector<Particle> particles;
+    #endif
+    int inc;
 
     World(std::string config);
     ~World();
@@ -88,34 +131,28 @@ public:
     void init();                            //Do any configurations
     //Perform a step of length dt
     void step();
-    
-    void getMass();                         //Form diagonal mass matrix from interpolation
-    void getDeformationGradient();          //Calculate deformation gradient for each cell center
-    void computeStress();                   //Compute stress from deformation gradients
-    void computeForce();                    //Compute tau and assemble force vector
-    void solveVelocity();                   //Solve Mv=f* for new grid node velocities
-    void velExtrapolate();                  //Extrapolate new velocity to inactive cells
-    void advect();                          //Advect material coordinates
-	#ifdef MAT_EXTRAP
-	void extrapolate_mat();
-	#endif
+    void computeKf();
+    void computeMV();
+    void pcrImplicit();
+    void finalizeSolution();
+
+    double computeF(const MatrixX& coord, const MatrixX& pNpF, MatrixN& F);
+    void materialInit(const MatrixN& F);
+    void svd(const MatrixN& F, MatrixN& U, MatrixN& Fhat, MatrixN& V);
+    MatrixN firstPiolaKirchhoff();
+    MatrixN firstPKDifferential(const MatrixN& dF);
+    void computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxhat);
+    bool solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M);
+    void computeSDF();
+    void advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace);
+    void computeSolidMass(bool usesdf=false);
+    void gatherSolidMasses();
+    MatrixN crossMatrix(const VectorN& vec);
 
     //Helpers
-    Eigen::Matrix2d upwindJac(Eigen::Vector2d* field, int i, int j, bool boundary=true);       //Forms jacobian using upwinding scheme on the velocity field at position (i,j)
-    void distSweep(double *field, std::vector<char> initial, int iters, double eps);
+    void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);
     void velSweep(Eigen::Vector2d *vel, double *field, int iters, double eps);
     void sweepAve(Eigen::Vector2d *vel, int iters);
-    
-    #ifndef NDEBUG
-    Eigen::Matrix2d *dD;
-    Eigen::Vector2d **matTrans;
-    int count, sMax;
-    Eigen::VectorXd vdiff, vdiff2;
-    std::vector<Particle> particles;
-    Eigen::Vector2d *forces, *advFrc, *elastFrc, *extFrc;
-    #endif
-    int inc;
-    Eigen::Vector2d *tmpVel;
 
     benlib::Profiler prof;
 };

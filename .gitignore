@@ -1,3 +1,6 @@
 *.o
 ~*
 *.d
+bin
+build
+.DS_Store

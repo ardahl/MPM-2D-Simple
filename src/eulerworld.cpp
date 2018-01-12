@@ -16,16 +16,13 @@ using benlib::range;
 std::ofstream debug;
 #endif
 
-//TODO: Add option for start and end point of grid
-//TODO: Go through and consolidate pointers, look into 2*X dimentional vectors instead
-
 World::World(std::string config) {
     stepNum = 0;
     elapsedTime = 0.0;
     filename = config;
 
     std::ifstream ins(filename.c_str());
-  
+
     Json::Value root;
     Json::Reader jReader;
 
@@ -34,7 +31,7 @@ World::World(std::string config) {
                   << jReader.getFormattedErrorMessages() << std::endl;
         std::exit(1);
     }
-    
+
     Vector3d c;
     std::string str, objType = "square";
 
@@ -52,31 +49,39 @@ World::World(std::string config) {
             steps = stepsIn.asInt();
             dt = (1.0/(double)frames)/steps;
         }
-    } 
+    }
     else {
         dt = dtIn.asDouble();
         steps = (int)std::round((1.0/(double)frames)/dt);
     }
-    
+
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
     double lambda=0, mu=0;                      //Lame Constants for stress
-    double compression; //critical compression (sec. 5 of stomahkin)
-    double stretch; //critical stretch (sec. 5 of stomahkin)
-    double massPropDamp, alpha;
+    double massPropDamp;
 	// read global material properties, these may be overridden per object
     auto lameIn = root["lame"];
     if (lameIn.size() != 2) {
         std::cout<< "bad lame, skipping" << std::endl;
-    } 
+    }
     else {
         lambda = lameIn[0].asDouble();
         mu = lameIn[1].asDouble();
     }
 	massPropDamp = root.get("massPropDamp",0.99999).asDouble();
-	alpha = root.get("alpha",0.95).asDouble();
+    auto rayleighIn = root["rayleigh"];
+    if(rayleighIn.size() == 2) {
+        rayleighAlpha = rayleighIn[0].asDouble();
+        rayleighBeta = rayleighIn[1].asDouble();
+    }
+    else {
+        rayleighAlpha = 0;
+        rayleighBeta = 0;
+    }
+    double alpha;
+    alpha = root.get("alpha",0.95).asDouble();
 
-
+    double stretch, compression;
     auto stretchIn = root["stretch"];
     auto compressIn = root["compression"];
     if (stretchIn.isNull() || compressIn.isNull()){
@@ -91,12 +96,12 @@ World::World(std::string config) {
         std::cout << "Compression: " << compression << std::endl;
         std::cout << "Stretch: " << stretch << std::endl;
     }
-  
+
     double pmass = root["mass"].asDouble();
     auto colorIn = root["color"];
     if (colorIn.size() != 3) {
         c = Vector3d(1, 0, 0);
-    } 
+    }
     else {
         c = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
     }
@@ -153,11 +158,11 @@ World::World(std::string config) {
 		mp.alpha = objectsIn[i].get("alpha",alpha).asDouble();
 		mp.stretch = objectsIn[i].get("stretch", stretch).asDouble();
 		mp.compression = objectsIn[i].get("compression", stretch).asDouble();
-        
+
         mp.pmass = objectsIn[i].get("particleMass", pmass).asDouble();
         mp.pmass = objectsIn[i].get("mass", mp.pmass).asDouble();
         mp.mass = objectsIn[i].get("objectMass", -1.0).asDouble();
-        
+
         auto colorIn = objectsIn[i]["color"];
         if (colorIn.size() == 3) {
             objects[i].color = Eigen::Vector3d(colorIn[0].asDouble(), colorIn[1].asDouble(), colorIn[2].asDouble());
@@ -167,12 +172,12 @@ World::World(std::string config) {
         }
     }
 
-    auto gridIn = root["grid"]; 
+    auto gridIn = root["grid"];
     {
         auto originIn = gridIn["origin"];
         if (originIn.size() != 2) {
 		  origin = Vector2d(0.0,0.0);
-        } 
+        }
         else {
             origin = Vector2d(originIn[0].asDouble(),originIn[1].asDouble());
         }
@@ -180,7 +185,7 @@ World::World(std::string config) {
         if (sizeIn.size() != 2) {
             std::cout<< "bad grid size, exiting" << std::endl;
 			exit(-1);
-        } 
+        }
         else {
             res[0] = sizeIn[0].asInt();
             res[1] = sizeIn[1].asInt();
@@ -195,7 +200,7 @@ World::World(std::string config) {
 		}
         center = ((h*Vector2d(res[0]-1, res[1]-1)) / 2.0) + origin;
     }
-  
+
     auto gravityIn = root["gravity"];
     if (gravityIn.isNull() || gravityIn.size() != 2) {
         std::cout<< "no gravity" << std::endl;
@@ -214,12 +219,12 @@ World::World(std::string config) {
         std::cout << "no rotation" << std::endl;
         rotationEnabled = false;
         rotation = 0;
-    } 
+    }
     else {
         rotationEnabled = true;
         rotation = rotationIn.asDouble();
     }
-    
+
 
     for(size_t o = 0; o < objects.size(); o++) {
         Object& obj = objects[o];
@@ -252,7 +257,7 @@ World::World(std::string config) {
             //technically this is an ellipse because I'm using the same data as the
             //square and just using the size vector as radius of the semi-major and semi-minor axes
             //just make a square and reject those outside the ellipse.
-            //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
+            //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles
             double diffx = 2*obj.size[0] / (obj.ores[0]-1);
             double diffy = 2*obj.size[1] / (obj.ores[1]-1);
             for(int i = 0; i < obj.ores[0]; i++) {
@@ -281,7 +286,7 @@ World::World(std::string config) {
             obj.mp.mass = obj.mp.pmass * obj.particles.size();
         }
     }
-  
+
     //Average position for center of mass
     for(size_t i = 0; i < objects.size(); i++) {
         Vector2d avePos = Vector2d::Zero();
@@ -293,21 +298,21 @@ World::World(std::string config) {
         avePos /= objects[i].particles.size();
         objects[i].center = avePos;
     }
-  
+
     printf("Grid:\n");
     printf("Dimentions: %dx%d\n", res[0], res[1]);
     printf("Grid Spacing: %f\n", h);
     printf("X0: (%f, %f)\n", origin(0), origin(1));
     printf("X1: (%f, %f)\n", origin(0)+h*(res[0]-1), origin(1)+h*(res[1]-1));
     printf("Center: (%f, %f)\n", center(0), center(1));
-    
+
     printf("\nConstants:\n");
     printf("Total Time: %f\n", totalTime);
     printf("dt: %f\n", dt);
     printf("Steps per Frame: %d\n", (int)std::round(1.0/(30*dt)));
     printf("Gravity: (%f, %f)\n", gravity(0), gravity(1));
     printf("Rotation: %f\n", rotation);
-    
+
     for(size_t i = 0; i < objects.size(); i++) {
         printf("\nObject %d\n", (int)i);
         printf("Type: %s\n", objects[i].type.c_str());
@@ -320,32 +325,62 @@ World::World(std::string config) {
     }
     printf("\n");
 
-	// allocate grid values
-    mass = new double[res[0]*res[1]];
-    vel = new Vector2d[res[0]*res[1]];
-    tau = new Vector2d[res[0]*res[1]];
-    mat = new Vector2d[res[0]*res[1]];
-    dXx = new Vector2d[(res[0]-1)*res[1]];
-    dXy = new Vector2d[res[0]*(res[1]-1)];
-    stress = new Matrix2d[(res[0]-1)*(res[1]-1)];
-    F = new Matrix2d[(res[0]-1)*(res[1]-1)]; 
-    valid.assign(res[0]*res[1], 0);
-    cvalid.assign(res[0]*res[1], 0);
-    phi = new double[res[0]*res[1]];
-    tmpVel = new Vector2d[res[0]*res[1]];
-    #ifndef NDEBUG
-    dD = new Matrix2d[res[0]*res[1]];
+    totalActiveCells = (res[0]-2) * (res[1]-2);
+    totalCells = res[0] * res[1];
+    subsampleDh = h / 10.0;
+    quarterCellSolidMass = 1;
+    offsets[0] = 0;
+    offsets[1] = 1;
+    offsets[2] = res[0];
+    offsets[3] = res[0]+1;
+    G.resize(QUAD, DIM);
+    for(int i = 0; i < QUAD; i++) {
+        G(i, 0) = i % 2 == 0 ? -1 : 1;
+        G(i, 1) = i % 4 <= 1 ? -1 : 1;
+        #if DIM == 3
+        G(i, 2) = i < 4 ? -1 : 1;
+        #endif
+    }
+    G *= 0.25 * (1.0/h);
+    //Sizing vectors
+    X = std::vector<VectorN>(totalCells);
+    u = std::vector<VectorN>(totalCells);
+    mass = std::vector<double>(totalCells);
+    velocity = std::vector<VectorN>(totalCells);
+    valid = std::vector<char>(totalCells, 0);
+    vecWorkspace = std::vector<VectorN>(totalCells);
+    phi = std::vector<double>(totalCells);
+    detFInv = std::vector<double>(totalCells);
+    gridToSolution = std::vector<int>(totalCells);
+    gridToSolid = std::vector<int>(totalCells);
+    tripletList = std::vector<ETriplet>(totalCells);
+    restMass = std::vector<double>(totalCells, 0);
+    nodeSolidVolumeFraction = std::vector<double>(totalCells);
+
+    vStar = VectorX(totalCells);                           //updated velocity from forces solve
+    mv = VectorX(totalCells);
+    solidMv = VectorX(totalCells);
+    unitForce = VectorX(totalCells);
+    solidUnitForce = VectorX(totalCells);
+    nzMassVec = VectorX(totalCells);
+    nzMassVecInv = VectorX(totalCells);
+    dampedMass = VectorX(totalCells);
+    quarterVolumeFractions = VectorX(QUAD*totalCells);
+
+    xmin = 0;
+    ymin = 0;
+    xmax = res[0];
+    ymax = res[1];
+    #if DIM == 3
+    zmin = 0;
+    zmax = res[2];
+    tightMin = VectorI(0, 0, 0);
+    tightMax = VectorI(res[0], res[1], res[2]);
+    #else
+    tightMin = VectorI(0, 0);
+    tightMax = VectorI(res[0], res[1]);
     #endif
-    
-    {double *m = mass; for (int i=0; i<res[0]*res[1]; i++, m++) (*m) = 0.0;}
-    {Vector2d *v = vel; for (int i=0; i<res[0]*res[1]; i++, v++) (*v) = Vector2d::Zero();}
-    {Vector2d *f = tau; for (int i=0; i<res[0]*res[1]; i++, f++) (*f) = Vector2d::Zero();}
-    {Vector2d *c = mat; for (int i=0; i<res[0]*res[1]; i++, c++) (*c) = Vector2d::Zero();}
-    {Vector2d *dx = dXx; for (int i=0; i<(res[0]-1)*res[1]; i++, dx++) (*dx) = Vector2d::Zero();}
-    {Vector2d *dy = dXy; for (int i=0; i<res[0]*(res[1]-1); i++, dy++) (*dy) = Vector2d::Zero();}
-    {Matrix2d *s = stress; for (int i=0; i<(res[0]-1)*(res[1]-1); i++, s++) (*s) = Matrix2d::Zero();}
-    {Matrix2d *dg = F; for (int i=0; i<(res[0]-1)*(res[1]-1); i++, dg++) (*dg) = Matrix2d::Zero();}
-    
+
     inc = steps;
     #ifndef NDEBUG
     inc = 1;
@@ -355,90 +390,15 @@ World::World(std::string config) {
     for(int i = 0; i < sMax; i++) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
     }
-    vdiff = VectorXd(2*res[0]*res[1]);
-    vdiff2 = VectorXd(2*res[0]*res[1]);
-    forces = new Vector2d[res[0]*res[1]];
-    advFrc = new Vector2d[res[0]*res[1]];
-    elastFrc = new Vector2d[res[0]*res[1]];
-    extFrc = new Vector2d[res[0]*res[1]];
     #endif
 }
 
-inline double interpolate(Vector2d point, double* field, Vector2d origin, int res[2], double h) {
+inline Vector3d interpolate(VectorN point, std::vector<Vector3d> field, Vector3d bg, VectorN origin, int res[2], double h) {
     /// wx = x - x1;
     /// wy = y - y1;
     /// v = (1-wx)*(1-wy)*v[i1][j1] + (wx)*(1-wy)*v[i1+1][j1] + (1-wx)*(wy)*v[i1][j1+1] + (wx)*(wy)*v[i1+1][j1+1];
-    Vector2d x = (point - origin);
-    Vector2d ij = x / h;    
-    int i1 = (int)ij(0);
-    int j1 = (int)ij(1);
-    int i2 = i1+1;
-    int j2 = j1+1;
-    double x1 = h*i1;
-    double y1 = h*j1;
-    double wx = (x(0) - x1) / h;
-    double wy = (x(1) - y1) / h;
-    double v = 0;
-    if(i1*res[1]+j1 >= 0 && i1*res[1]+j1 < res[0]*res[1]) {
-        v += (1-wx)*(1-wy)*field[i1*res[1]+j1];
-    }
-    if(i2*res[1]+j1 >= 0 && i2*res[1]+j1 < res[0]*res[1]) {
-        v += (wx)*(1-wy)*field[i2*res[1]+j1];
-    }
-    if(i1*res[1]+j2 >= 0 && i1*res[1]+j2 < res[0]*res[1]) {
-        v += (1-wx)*(wy)*field[i1*res[1]+j2];
-    }
-    if(i2*res[1]+j2 >= 0 && i2*res[1]+j2 < res[0]*res[1]) {
-        v += (wx)*(wy)*field[i2*res[1]+j2];
-    }
-    /// double v = (1-wx)*(1-wy)*field[i1*res[1]+j1] + 
-               /// (wx)  *(1-wy)*field[i2*res[1]+j1] + 
-               /// (1-wx)*(wy)  *field[i1*res[1]+j2] + 
-               /// (wx)  *(wy)  *field[i2*res[1]+j2];
-    return v;
-}
-
-inline Vector2d interpolate(Vector2d point, Vector2d* field, Vector2d origin, int res[2], double h) {
-    /// wx = x - x1;
-    /// wy = y - y1;
-    /// v = (1-wx)*(1-wy)*v[i1][j1] + (wx)*(1-wy)*v[i1+1][j1] + (1-wx)*(wy)*v[i1][j1+1] + (wx)*(wy)*v[i1+1][j1+1];
-    Vector2d x = (point - origin);
-    Vector2d ij = x / h;    
-    int i1 = (int)ij(0);
-    int j1 = (int)ij(1);
-    int i2 = i1+1;
-    int j2 = j1+1;
-    double x1 = h*i1;
-    double y1 = h*j1;
-    double wx = (x(0) - x1) / h;
-    double wy = (x(1) - y1) / h;
-    Vector2d v = Vector2d::Zero();
-    if(i1*res[1]+j1 >= 0 && i1*res[1]+j1 < res[0]*res[1]) {
-        v += (1-wx)*(1-wy)*field[i1*res[1]+j1];
-    }
-    if(i2*res[1]+j1 >= 0 && i2*res[1]+j1 < res[0]*res[1]) {
-        v += (wx)*(1-wy)*field[i2*res[1]+j1];
-    }
-    if(i1*res[1]+j2 >= 0 && i1*res[1]+j2 < res[0]*res[1]) {
-        v += (1-wx)*(wy)*field[i1*res[1]+j2];
-    }
-    if(i2*res[1]+j2 >= 0 && i2*res[1]+j2 < res[0]*res[1]) {
-        v += (wx)*(wy)*field[i2*res[1]+j2];
-    }
-    /// Vector2d v = (1-wx)*(1-wy)*field[i1*res[1]+j1] + 
-                 /// (wx)  *(1-wy)*field[i2*res[1]+j1] + 
-                 /// (1-wx)*(wy)  *field[i1*res[1]+j2] + 
-                 /// (wx)  *(wy)  *field[i2*res[1]+j2];
-    
-    return v;
-}
-
-inline Vector3d interpolate(Vector2d point, Vector3d* field, Vector3d bg, Vector2d origin, int res[2], double h) {
-    /// wx = x - x1;
-    /// wy = y - y1;
-    /// v = (1-wx)*(1-wy)*v[i1][j1] + (wx)*(1-wy)*v[i1+1][j1] + (1-wx)*(wy)*v[i1][j1+1] + (wx)*(wy)*v[i1+1][j1+1];
-    Vector2d x = (point - origin);
-    Vector2d ij = x / h;    
+    VectorN x = (point - origin);
+    VectorN ij = x / h;
     int i1 = (int)ij(0);
     int j1 = (int)ij(1);
     int i2 = i1+1;
@@ -472,17 +432,86 @@ inline Vector3d interpolate(Vector2d point, Vector3d* field, Vector3d bg, Vector
     else {
 		v += (wx)*(wy)*bg;
 	}
-    /// Vector2d v = (1-wx)*(1-wy)*field[i1*res[1]+j1] + 
-                 /// (wx)  *(1-wy)*field[i2*res[1]+j1] + 
-                 /// (1-wx)*(wy)  *field[i1*res[1]+j2] + 
+    /// Vector2d v = (1-wx)*(1-wy)*field[i1*res[1]+j1] +
+                 /// (wx)  *(1-wy)*field[i2*res[1]+j1] +
+                 /// (1-wx)*(wy)  *field[i1*res[1]+j2] +
                  /// (wx)  *(wy)  *field[i2*res[1]+j2];
-    
+
     return v;
 }
 
+template <class T>
+inline T lerp(const T& value0, const T& value1, double f) {
+    return (1 - f) * value0 + f * value1;
+}
+
+template <class T>
+inline T bilerp(const T& v00, const T& v10, const T& v01, const T& v11, double fx, double fy) {
+    return lerp(lerp(v00, v10, fx), lerp(v01, v11, fx), fy);
+}
+
+template <class T>
+inline T trilerp(const T& v000, const T& v100, const T& v010, const T& v110,
+                       const T& v001, const T& v101, const T& v011, const T& v111,
+                       double fx, double fy, double fz) {
+    return lerp(bilerp(v000, v100, v010, v110, fx, fy),
+                bilerp(v001, v101, v011, v111, fx, fy), fz);
+}
+
+inline void get_barycentric(double x, int& i, double& f, int i_low, int i_high, double dh) {
+    x /= dh;
+    double s = std::floor(x);
+    i = int(s);
+    if(i < i_low) {
+        i = i_low;
+        f = 0.5;
+    }
+    else if(i > i_high) {
+        i = i_high;
+        f = 0.5;
+    }
+    else {
+        f = x - s;
+    }
+}
+
+template <class F>
+inline F interpolate_value(const VectorN& point, std::vector<F> field, VectorN origin, int res[DIM], double dh) {
+    #if DIM == 3
+    int i, j, k;
+    double fx, fy, fz;
+    #else
+    int i, j;
+    double fx, fy;
+    #endif
+
+    get_barycentric(point(0) - origin(0), i, fx, 0, res[0] - 2, dh);
+    get_barycentric(point(1) - origin(1), j, fy, 0, res[1] - 2, dh);
+    #if DIM == 3
+    get_barycentric(point(2) - origin(2), k, fz, 0, res[2] - 2, dh);
+    #endif
+
+    #if DIM == 3
+    const F& v000 = field(i, j, k);
+    const F& v001 = field(i, j, k + 1);
+    const F& v010 = field(i, j + 1, k);
+    const F& v011 = field(i, j + 1, k + 1);
+    const F& v100 = field(i + 1, j, k);
+    const F& v101 = field(i + 1, j, k + 1);
+    const F& v110 = field(i + 1, j + 1, k);
+    const F& v111 = field(i + 1, j + 1, k + 1);
+    return trilerp(v000, v100, v010, v110, v001, v101, v011, v111, fx, fy, fz);
+    #else
+    const F& v00 = field[i*res[1]+j];
+    const F& v01 = field[i*res[1]+(j+1)];
+    const F& v10 = field[(i+1)*res[1]+j];
+    const F& v11 = field[(i+1)*res[1]+(j+1)];
+    return bilerp(v00, v10, v01, v11, fx, fy);
+    #endif
+}
+
 void World::init() {
-    color = new Vector3d[res[0]*res[1]];
-    interpColor.resize(3*res[0]*res[1]);
+    color = std::vector<Vector3d>(res[0]*res[1], Vector3d(135,206,255));
     //Init material coordinates
     //(Temp for now) set up mass field
     /// Vector2d middle = origin + h*Vector2d((res[0]-1)/2, (res[1]-1)/2);
@@ -491,22 +520,24 @@ void World::init() {
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
             int index = i*res[1]+j;
-            Vector2d pos = origin + h*Vector2d(i, j);
-            Vector2d ph = pos - center;
+            VectorN pos = origin + h*VectorN(i, j);
+            VectorN ph = pos - center;
             // For Testing:
             // rotate material field and test D(X)
-            Rotation2D<double> rot(-0.785398);
-            Vector2d rpos = rot * ph;
-            mat[index] = rpos + center;
-            color[index] = Vector3d(135,206,255);
-            vel[index] = 0.5*Vector2d(-ph(1), ph(0));
+            // Rotation2D<double> rot(-0.785398);
+            // Vector2d rpos = rot * ph;
+            // X[index] = rpos + center;
+            X[index] = pos;
+            // color[index] = Vector3d(135,206,255);
+            // velocity[index] = 0.5*Vector2d(-ph(1), ph(0));
+            velocity[index] = VectorN::Zero();
             //Create a square in the center
             /// if(i >= (res[0]/2)-4 && i <= (res[0]/2)+4 && j >= (res[1]/2)-4 && j <= (res[1]/2)+4) {
             if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {	//circle
                 /// mass[index] = 0.067;  //.067kg * 9x9 = 5.44kg ~ 12lbs
                 count++;
                 //Start it out rotating
-                vel[index] = 0.5*Vector2d(-ph(1), ph(0));
+                // velocity[index] = 0.5*Vector2d(-ph(1), ph(0));
                 /// vel[index] = 0.5*Vector2d(1,0);
                 Vector3d col = Vector3d(255, 0, 0);
                 if(ph(0) < 0 && ph(1) < 0) {
@@ -523,179 +554,147 @@ void World::init() {
             }
         }
     }
-    double pmass = 9.07/count; // ~20lb / count
+    // double pmass = 18.14/count; // ~40lb / count
+    double pmass = 1000;
     for(int i = 0; i < res[0]; i++) {
 		for(int j = 0; j < res[1]; j++) {
 			int ind = i*res[1]+j;
+            VectorN pos = VectorN(i, j) * h + origin;
+            u[ind] = pos - X[ind];
 			if(valid[ind]) {
-				mass[ind] = pmass;
+				restMass[ind] = pmass;
 				//Add a passive particle at the cell
                 #ifndef NDEBUG
-                Particle p(mat[ind], Vector2d::Zero(), color[ind], pmass);
+                Particle p(X[ind], VectorN::Zero(), color[ind], pmass);
                 particles.push_back(p);
                 #endif
 			}
 		}
 	}
-    interpMass.resize(res[0]*res[1]);
-    Fstar.resize(2*res[0]*res[1]);
+    //Init materials
+    computeSolidMass();
+    computeSDF();
+
+    gatherSolidMasses();
+    gridToSolution.resize(totalCells, -1);
+    int idx = 0;
+    for (int x = 1; x < res[0] - 1; x++) {
+        for (int y = 1; y < res[1] - 1; y++) {
+            int index = x*res[1] + y;
+            gridToSolution[index] = idx++;
+        }
+    }
 }
 
+
 /******************************
- * Algorithm Process from Stomakhin et al. 2013 and Yue et al. 2015
- *
- * Compute_Particle_Volumes_And_Densities
- * while true
- *      Rasterize_Particle_Data_to_Grid
- *      Compute_Grid_Forces
- *      Update_Grid_Velocities
- *      Update_Deformation_Gradient
- *      Update_Particle_Velocities
- *      Update_Particle_Positions
+ * Algorithm Process from Eulerian Solid-Fluid Coupling
  ******************************/
 void World::step() {
     if(stepNum == 0) {
         #ifndef NDEBUG
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
-                matTrans[count][i*res[1]+j] = mat[i*res[1]+j];
+                matTrans[count][i*res[1]+j] = X[i*res[1]+j];
             }
         }
         count++;
         #endif
-        //write initial mass
-        std::ofstream mout("./euler/mass0");
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                mout << mass[i*res[1]+j] << " ";
-            }
-            mout << "\n";
-        }
-        mout.close();
-        //output vel for testing
-        std::ofstream vout("./euler/vel0");
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                Vector2d p = origin+h*Vector2d(i,j);
-                int ind = i*res[1]+j;
-                vout << p(0) << " " << p(1) << " " << vel[ind](0) << " " << vel[ind](1) << " 0 0 255" << "\n";
-            }
-        }
-        vout.close();
-        
         std::ofstream colout("./euler/col0");
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
-                /// Vector3d c = color[i*res[1]+j];
-                Vector2d coord = mat[i*res[1]+j];
+                VectorN coord = X[i*res[1]+j];
                 Vector3d c = interpolate(coord, color, Vector3d(135, 206, 255), origin, res, h);
-                Vector2d pos = origin+h*Vector2d(i,j);
+                VectorN pos = origin+h*Vector2d(i,j);
                 colout << pos(0) << " " << pos(1) << " " << (int)std::round(c(0)) << " " << (int)std::round(c(1)) << " " << (int)std::round(c(2)) << "\n";
             }
         }
         colout.close();
+        printf("Total Cells: %d\n", totalCells);
+        printf("Total Active Cells: %d\n", totalActiveCells);
+        printf("Total Solid Cells: %d\n", totalSolidCells);
+        std::exit(0);
     }
-    getMass();
-    cvalid = valid;
-    #ifdef MAT_EXTRAP
-    extrapolate_mat();
-    valid = cvalid;
-    #endif
-    //Calculates deformation gradient and stress
-    getDeformationGradient();
-    computeStress();
-    //Calculates the forces vector
-    computeForce();
-    //Solve M*v_t+1 = f*
-    solveVelocity();
-    velExtrapolate();
-    //Advect material coordinates
-    advect();
-    
+    //Reset and resize variables
+    mv.conservativeResize(totalActiveCells * DIM);
+    unitForce.conservativeResize(totalActiveCells * DIM);
+    unitForce.setZero();
+    nzMassVec.conservativeResize(totalActiveCells * DIM);
+    nzMassVecInv.conservativeResize(totalActiveCells * DIM);
+
+    solidUnitForce.conservativeResize(totalSolidCells * DIM);
+    solidUnitForce.setZero();
+    solidMv.conservativeResize(totalSolidCells * DIM);
+    solidMv.setZero();
+    dampedMass.conservativeResize(totalSolidCells * DIM);
+    dampedMass.setZero();
+    //Compute F and Stiffness Matrix
+    computeKf();
+    //Compute mv
+    computeMV();
+    //Mass part of rayleigh damping
+    double massDamp = 1 + dt * rayleighAlpha;
+    //Compute body Forces
+    for(int i = 1; i < res[0]-1; i++) {
+        for(int j = 1; j < res[1]-1; j++) {
+            int index = i*res[1]+j;
+            int idx = gridToSolution[index];
+            int solidIdx = gridToSolid[index];
+            double m = mass[index];
+
+            if(solidIdx < 0) {
+                unitForce.segment<DIM>(idx*DIM) += m * gravity;
+                //Not sure what the nz means
+                nzMassVec[idx * DIM] = nzMassVec[idx * DIM + 1] = m;
+                #if DIM == 3
+                nzMassVec[idx * DIM + 2] = mass;
+                #endif
+            }
+            else {
+                dampedMass[solidIdx * DIM] = dampedMass[solidIdx * DIM + 1] = m * massDamp;
+                #if DIM == 3
+                dampedMass[solidIdx * DIM + 2] = m * massDamp;
+                #endif
+                solidUnitForce.segment<DIM>(solidIdx * DIM) += m * gravity;
+            }
+            nzMassVecInv[idx * DIM] = nzMassVecInv[idx * DIM + 1] = 1.0 / m;
+            #if DIM == 3
+            nzMassVecInv[idx * DIM + 2] = 1.0 / m;
+            #endif
+        }
+    }
+    //Construct global system matrix
+    systemMat.resize(totalSolidCells*DIM, totalSolidCells*DIM);
+    systemMat.setFromTriplets(tripletList.begin(), tripletList.end());
+    systemMat *= dt*dt + rayleighBeta*dt;
+    for(int i = 0; i < dampedMass.size(); i++) {
+        systemMat.coeffRef(i, i) += dampedMass[i];
+    }
+    systemMat.makeCompressed();
+    //Do PCR (conjugate residual) solve
+    pcrImplicit();
+    //finalize solution
+    finalizeSolution();
+
     stepNum++;
 	elapsedTime += dt;
-    
+
     if(stepNum % inc == 0) {
-        //Write current mass
-        std::ofstream mout("./euler/mass"+std::to_string(stepNum/inc));
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                mout << interpMass(i*res[1]+j) << " ";
-            }
-            mout << "\n";
-        }
-        mout.close();
-        
         std::ofstream colout("./euler/col"+std::to_string(stepNum/inc));
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
-                Vector3i c = interpColor.segment(3*(i*res[1]+j), 3);
-                Vector2d pos = origin+h*Vector2d(i,j);
-                colout << pos(0) << " " << pos(1) << " " << c(0) << " " << c(1) << " " << c(2) << "\n";
+                VectorN coord = X[i*res[1]+j];
+                Vector3d c = interpolate(coord, color, Vector3d(135, 206, 255), origin, res, h);
+                VectorN pos = origin+h*VectorN(i,j);
+                colout << pos(0) << " " << pos(1) << " " << (int)std::round(c(0)) << " " << (int)std::round(c(1)) << " " << (int)std::round(c(2)) << "\n";
             }
         }
         colout.close();
-        
-        std::ofstream vout("./euler/vel"+std::to_string(stepNum/inc));
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                Vector2d p = origin+h*Vector2d(i,j);
-                int ind = i*res[1]+j;
-                Vector3i col(255, 0, 0);
-                if(cvalid[i*res[1]+j]) {
-                    col = Vector3i(0, 0, 255);
-                }
-                vout << p(0) << " " << p(1) << " " << vel[ind](0) << " " << vel[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
-            }
-        }
-        vout.close();
-        
-        std::ofstream fout("./euler/frc"+std::to_string(stepNum/inc));
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                Vector2d p = origin+h*Vector2d(i,j);
-                int ind = i*res[1]+j;
-                Vector3i col(255, 0, 0);
-                if(cvalid[i*res[1]+j]) {
-                    col = Vector3i(0, 0, 255);
-                }
-                fout << p(0) << " " << p(1) << " " << forces[ind](0) << " " << forces[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
-            }
-        }
-        fout.close();
-        
-        std::ofstream afout("./euler/advfrc"+std::to_string(stepNum/inc));
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                Vector2d p = origin+h*Vector2d(i,j);
-                int ind = i*res[1]+j;
-                Vector3i col(255, 0, 0);
-                if(cvalid[i*res[1]+j]) {
-                    col = Vector3i(0, 0, 255);
-                }
-                afout << p(0) << " " << p(1) << " " << advFrc[ind](0) << " " << advFrc[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
-            }
-        }
-        afout.close();
-        
-        std::ofstream efout("./euler/elastfrc"+std::to_string(stepNum/inc));
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                Vector2d p = origin+h*Vector2d(i,j);
-                int ind = i*res[1]+j;
-                Vector3i col(255, 0, 0);
-                if(cvalid[i*res[1]+j]) {
-                    col = Vector3i(0, 0, 255);
-                }
-                efout << p(0) << " " << p(1) << " " << elastFrc[ind](0) << " " << elastFrc[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
-            }
-        }
-        efout.close();
-        
+
         #ifndef NDEBUG
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
-                matTrans[count][i*res[1]+j] = mat[i*res[1]+j];
+                matTrans[count][i*res[1]+j] = X[i*res[1]+j];
             }
         }
         count++;
@@ -712,910 +711,683 @@ void World::step() {
                 }
             }
             mats.close();
-            
-            std::ofstream par("./euler/particles");
-            for(int i = 0; i < (int)particles.size(); i++) {
-				Particle& p = particles[i];
-				int j;
-				for(j = 0; j < (int)p.hist.size(); j++) {
-					par << p.hist[j](0) << " " << p.hist[j](1) << " " << j << "\n";
-				}
-				par << p.x(0) << " " << p.x(1) << " " << j << "\n\n\n";
-			}
-            par.close();
             std::exit(0);
         }
         #endif
     }
 }
 
-//Loop through grid nodes
-//  Lookup material coordinate at that point
-//  Interpolate initial mass field around that point. Form vector, then matrix
-void World::getMass() {
-    numNodesMass = 0;
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            int index = i*res[1]+j;
-            //Get mat coords
-            Vector2d coord = mat[index];
-            //interpolate mass at that point
-            double m = interpolate(coord, mass, origin, res, h);
-            interpMass(index) = m;
-            //Interpolate color for rendering
-            Vector3d cd = interpolate(coord, color, Vector3d(135, 206, 255), origin, res, h);
-            Vector3i c((int)std::round(cd(0)), (int)std::round(cd(1)), (int)std::round(cd(2)));
-            interpColor.segment(3*index, 3) = c;
-            if(m > EPS) {
-                numNodesMass++;
-                valid[index] = 1;
-                /// if(stepNum == 0) {
-					/// Vector2d pos = origin + h*Vector2d(i, j);
-					/// Vector2d ph = pos - center;
-					/// vel[index] = 0.5*Vector2d(-ph(1), ph(0));
-				/// }
-            }
-            else {
-                interpMass(index) = 0;
-                valid[index] = 0;
-				/// if(stepNum == 0) {
-					/// vel[index] = Vector2d::Zero();
-				/// }
-            }
-        }
-    }
-    
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-        debug << "\n\nStep " << stepNum << "\n";
-        debug << "Non-0 Mass: " << numNodesMass << "\n";
-        debug << "\nX:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << "(" << mat[i*res[1]+j](0) << "," << mat[i*res[1]+j](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "Mass:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << mass[i*res[1]+j] << " ";
-            }
-            debug << "\n";
-        }
-        debug << "InterpMass:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << interpMass(i*res[1]+j) << " ";
-            }
-            debug << "\n";
-        }
-        debug << "Valid:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << (int)valid[i*res[1]+j] << " ";
-            }
-            debug << "\n";
-        }
-        debug << "Vel:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << "(" << vel[i*res[1]+j](0) << "," << vel[i*res[1]+j](1) << ") ";
-            }
-            debug << "\n";
-        }
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
+//Compute Stiffness Matrix and Material Forces
+void World::computeKf() {
+    int startSize = tripletList.size();
 
-#ifdef MAT_EXTRAP
-//Extrapolate material coordinates from the center object
-void World::extrapolate_mat() {
-	//First create phi
-    //As a hack for now, just copy the values so that the invalid ones are a very large value
-    for(int i = 0; i < res[0]*res[1]; i++) {
-        phi[i] = std::numeric_limits<double>::infinity();
-        if(valid[i]) {
-            phi[i] = -h/2.0;
-        }
-    }
-    std::vector<char> tmpvalid = valid;
-    //First sweep to extend distance field
-    distSweep(phi, tmpvalid, 20, 1e-12);
-    
-	//Extrapolate out in a fast marching approach
-	std::vector<std::tuple<double,int,int>> sortedphi;
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            if(!valid[i*res[1]+j]) {
-                //Could switch but then sort requires custom function
-                sortedphi.push_back(std::make_tuple(phi[i*res[1]+j], i, j));
-            }
-        }
-    }
-    std::sort(sortedphi.begin(), sortedphi.end());
-    
-    //Go through array, calculating new material for each element
-    std::vector<std::tuple<double,int,int>>::iterator it;
-	double xh = 0, yh = 0;
-	Vector2d xm, ym;
-    for(it = sortedphi.begin(); it != sortedphi.end(); it++) {
-        int x = std::get<1>(*it);
-        int y = std::get<2>(*it);
-        int index = x*res[1]+y;
-        int xp1 = (x+1)*res[1]+y;
-        int xm1 = (x-1)*res[1]+y;
-        int yp1 = x*res[1]+(y+1);
-        int ym1 = x*res[1]+(y-1);
-        
-        //Look in x direction
-        if(x < res[0]-1 && valid[xp1]) {	//right valid, -h
-			xh = -h;
-			xm = mat[xp1];
-		}
-		else if(x > 0 && valid[xm1]) {		//left valid, +h
-			xh = h;
-			xm = mat[xm1];
-		}
-		else {								//0
-			xh = 0;
-			xm = Vector2d::Zero();
-		}
-        
-        //look in y direction
-        if(y < res[1]-1 && valid[yp1]) {	//right valid, -h
-			yh = -h;
-			ym = mat[yp1];
-		}
-		else if(y > 0 && valid[ym1]) {		//left valid, +h
-			yh = h;
-			ym = mat[ym1];
-		}
-		else {								//0
-			yh = 0;
-			ym = Vector2d::Zero();
-		}
-		
-		//If one direction is empty, we want to keep the value from the other direction
-		if(xh == 0 && yh != 0) {
-			xm = ym;
-		}
-		else if(yh == 0 && xh != 0) {
-			ym = xm;
-		}
-		else if(xh == 0 && yh == 0){
-			printf("Really shouldn't happen");
-		}
-		mat[index] = Vector2d(xm(0)+xh, ym(1)+yh);
-		valid[index] = 1;
-    }
-}
-#endif
+    VectorX localForce(solidUnitForce.size());
+    localForce.setZero();
+    std::vector<ETriplet> localMat;
 
-//Loop through grid nodes from i,j to m-1,n-1
-//  Do partial derivatives along i,j and i+1,j+1 boundaries. Store partial vector results on staggered grid
-//Loop through cell centers
-//  Interpolate partial results in x and y direction
-//  Form deformation gradient F
-void World::getDeformationGradient() {
-    //Partials along X  (i+1,j)-(i,j)
-    for(int i = 0; i < res[0]-1; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            int index = i*res[1]+j;
-            int ind2 = (i+1)*res[1]+j;
-            Vector2d dx = (mat[ind2] - mat[index]) / h;
-            dXx[index] = dx;
-        }
-    }
-    //Partials along Y  (i,j+1)-(i,j)
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]-1; j++) {
-            int index = i*(res[1]-1)+j;
-            int ind2 = i*(res[1]-1)+(j+1);
-            Vector2d dy = (mat[ind2] - mat[index]) / h;
-            dXy[index] = dy;
-        }
-    }
-    //Cell Centers
-    for(int i = 0; i < res[0]-1; i++) {
-        for(int j = 0; j < res[1]-1; j++) {
-            int index1 = i*res[1]+j;
-            int index2 = i*(res[1]-1)+j;
-            //Average dx values along (i,j) and (i,j+1)
-            Vector2d dx = (dXx[index1] + dXx[i*res[1]+(j+1)]) / 2.0;
-            //Average dy values along (i,j) and (i+1,j)
-            Vector2d dy = (dXy[index2] + dXy[(i+1)*(res[1]-1)+j]) / 2.0;
-            Matrix2d grad;
-            grad.col(0) = dx;
-            grad.col(1) = dy;
-            if(std::abs(grad.determinant()) > 1e-4) {
-                F[index2] = grad.inverse();
-            }
-            else {
-                F[index2] = Matrix2d::Zero();                
-            }
-        }
-    }
-    
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-        //Print gradients
-        debug << "F: \n";
-        for(int j = res[1]-2; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]-1; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(F[ind](k,0) < 0) {
-                        debug << F[ind](k,0);
-                    }
-                    else {
-                        debug << F[ind](k,0);
-                    }
-                    debug << ",";
-                    if(F[ind](k,1) < 0) {
-                        debug << F[ind](k,1);
-                    }
-                    else {
-                        debug << F[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
-
-//Loop through cell centers
-//  Calculate stress from F using stress-strain model
-void World::computeStress() {
-    //Only dealing with 1 object right now
-    MaterialProps &mp = objects[0].mp;  
-    for(int i = 0; i < res[0]-1; i++) {
-        for(int j = 0; j < res[1]-1; j++) {
-            int index = i*res[1]+j;
-            Matrix2d Ft = F[index].transpose();
-            Matrix2d strain = 0.5 * (Ft*F[index] - Matrix2d::Identity());
-            Matrix2d linstress = mp.lambda*strain.trace()*Matrix2d::Identity() + 2.0*mp.mu*strain;
-            stress[index] = linstress;
-        }
-    }
-    
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-        //Print gradients
-        debug << "Stress: \n";
-        for(int j = res[1]-2; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]-1; i++) {
-                    int ind = i*res[0]+j;
-                    debug << "[";
-                    if(stress[ind](k,0) < 0) {
-                        debug << stress[ind](k,0);
-                    }
-                    else {
-                        debug << stress[ind](k,0);
-                    }
-                    debug << ",";
-                    if(stress[ind](k,1) < 0) {
-                        debug << stress[ind](k,1);
-                    }
-                    else {
-                        debug << stress[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
-
-//Loop through grid nodes
-//  Compute tau_c for each node direction
-//  Compute tau from summing them
-//  Compute D(v) using upwinding scheme
-//  f* = Mv-dt*(M*D(v)*v - tau - f_ext)
-//  add f* to F*. Each entry in F* corresponds to the same node in M
-void World::computeForce() {
-	#ifndef NDEBUG
-	double maxErr = 0;
-	#endif
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            int index = i*res[1]+j;
-            /// if(!valid[index]) {
-                /// tau[index] = Vector2d::Zero();
-                /// Fstar.segment(2*index,2) = Vector2d::Zero();
-                /// #ifndef NDEBUG
-                /// dD[index] = Matrix2d::Zero();
-                /// #endif
-                /// continue;
-            /// }
-            //Compute tau by summing up all the tau_c for the 4 neighbors
-            //-.5L(sum of n * stress)
-            Vector2d ftau(0,0);
-            Vector2d n1, n2;
-            if(i != 0) { //left side
-                if(j != 0) {    //bottom left, n=(-1,-1)
-                    n1 = Vector2d(1, 0);
-                    n2 = Vector2d(0, 1);
-                    Matrix2d s = stress[(i-1)*res[1]+(j-1)];
-                    ftau += (s*n1 + s*n2);
-                }
-                if(j != res[1]-1) { //upper left, n=(-1,1)
-                    n1 = Vector2d(1, 0);
-                    n2 = Vector2d(0, -1);
-                    Matrix2d s = stress[(i-1)*res[1]+j];
-                    ftau += (s*n1 + s*n2);
-                }
-            }
-            if(i != res[0]-1) {    //right side
-                if(j != 0) {    //bottom right, n=(1,-1)
-                    n1 = Vector2d(-1, 0);
-                    n2 = Vector2d(0, 1);
-                    Matrix2d s = stress[i*res[1]+(j-1)];
-                    ftau += (s*n1 + s*n2);
-                }
-                if(j != res[1]-1) { //upper right, n=(1,1)
-                    n1 = Vector2d(-1, 0);
-                    n2 = Vector2d(0, -1);
-                    Matrix2d s = stress[i*res[1]+j];
-                    ftau += (s*n1 + s*n2);
-                }
-            }
-            ftau *= -0.5*h; 
-            tau[index] = ftau;
-            
-            //Compute discrete jacobian
-            Matrix2d D;
+    for(int i = tightMin[0]; i < tightMax[0]-1; i++) {
+        for(int j = tightMin[1]; j < tightMax[1]-1; j++) {
+            int index = i*res[1] + j;
             if(!valid[index]) {
-				D = Matrix2d::Zero();
-			}
-			else {
-				D = upwindJac(vel, i, j);
-			}
-            #ifndef NDEBUG
-            dD[index] = D;
-            Matrix2d exactD;
-            if(cvalid[index]) {
-				exactD << 0.0, -0.5, 0.5, 0.0;
-			}
-			else {
-				exactD << 0.0, 0.0, 0.0, 0.0;
-			}
-            double err = (D-exactD).norm();
-            if(err > maxErr) {
-				maxErr = err;
-			}
-            #endif
-            //Compute force
-            Vector2d fext(0.0,0.0);
-            if(gravityEnabled) {
-                fext += interpMass(index)*gravity;
-            }
-            if(rotationEnabled) {
-                Vector2d d = origin+Vector2d(h*i,h*j)-center;
-                fext += interpMass(index)*rotation*Vector2d(-d(1), d(0));
-            }
-            Matrix2d Mdiag = interpMass(index)*Matrix2d::Identity();
-            /// D << 0, -0.5, 0.5, 0;
-            Vector2d frc = Mdiag*D*vel[index] - tau[index] - fext;
-            #ifndef NDEBUG
-            forces[index] = frc;
-            advFrc[index] = Mdiag*D*vel[index];
-            elastFrc[index] = -tau[index];
-            extFrc[index] = -fext;
-            #endif
-            //Fstar is actually momentum
-            Vector2d fstar = Mdiag*vel[index] - dt*frc;
-            Fstar.segment(2*index,2) = fstar;
-        }
-    }
-    
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-		std::ofstream eout("./euler/dv", std::ios_base::app | std::ios_base::out);
-		eout << maxErr << std::endl;
-		eout.close();
-	}
-    if(stepNum % inc == 0) {
-        //Print tau, D, and forces
-        debug << "Tau:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                debug << "(" << tau[i*res[1]+j](0) << "," << tau[i*res[1]+j](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "Dv: \n";
-        for(int j = res[1]-2; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]-1; i++) {
-                    int ind = i*res[0]+j;
-                    if(i == 31 && j == 48) {
-						printf("%f %f\n", dD[ind](k, 0), dD[ind](k, 1));
-					}
-                    debug << "[";
-                    if(dD[ind](k,0) < 0) {
-                        debug << dD[ind](k,0);
-                    }
-                    else {
-                        debug << dD[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dD[ind](k,1) < 0) {
-                        debug << dD[ind](k,1);
-                    }
-                    else {
-                        debug << dD[ind](k,1);
-                    }
-                    debug << "] ";
-                }
-                debug << "\n";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "Advection Forces:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << advFrc[index](0) << "," << advFrc[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "Elastic Forces:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << elastFrc[index](0) << "," << elastFrc[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "External Forces:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << extFrc[index](0) << "," << extFrc[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "Forces:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << forces[index](0) << "," << forces[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "F*:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << Fstar.segment(2*index,2)(0) << "," << Fstar.segment(2*index,2)(1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
-
-//Remove inactive nodes (M(i,j) = 0)
-//Solve Mv=F*
-void World::solveVelocity() {
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            int ind = i*res[1]+j;
-            if(interpMass(ind) > EPS) {
-                Vector2d m = interpMass(ind)*Vector2d::Ones();
-                Vector2d mi = m.cwiseInverse();
-                Matrix2d Mi = mi.asDiagonal();
-                Vector2d newVel = Mi*Fstar.segment(2*ind,2);
-                #ifndef NDEBUG
-                if(stepNum/steps > 9 && stepNum/steps < 16 && stepNum % inc == 0) {
-					vdiff.segment(2*ind, 2) = newVel;
-					if(stepNum/steps == 10) {
-						vdiff2.segment(2*ind, 2) = newVel;
-					}
-				}
-                #endif
-                vel[ind] = newVel;
-            }
-        }
-    }
-    
-    #ifndef NDEBUG
-    if(stepNum/steps > 10 && stepNum/steps < 16 && stepNum % inc == 0) {
-		std::ofstream vdiffout("./euler/vdiff"+std::to_string(stepNum/steps));
-		/// vdiffout << "Frame " << stepNum/steps << ", Step " << stepNum%steps << "\n";
-		for(int i = 0; i < res[0]; i++) {
-			for(int j = 0; j < res[1]; j++) {
-				int ind = i*res[1]+j;
-				Vector2d v = vdiff.segment(2*ind, 2)-vdiff2.segment(2*ind, 2);
-				/// vdiffout << "(" << v(0) << "," << v(1) << ") ";
-				Vector2d p = origin+h*Vector2d(i,j);
-                Vector3i col(255, 0, 0);
-                if(cvalid[i*res[1]+j]) {
-                    col = Vector3i(0, 0, 255);
-                }
-                vdiffout << std::setprecision(8) << std::scientific << p(0) << " " << p(1) << " " << v(0) << " " << v(1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
-				vdiff2 = vdiff;
-			}
-			/// vdiffout << "\n";
-		}
-		vdiffout.close();
-	}
-    if(stepNum % inc == 0) {
-        //print new velocity
-        debug << "New Vel:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << vel[index](0) << "," << vel[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-        debug << "\n";
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
-
-//Extrapolate new v using fast sweeping method
-//First step is to create the distance field. Starting with the inside distances
-//defined sweep them out to get outside distances to the surface. Then sweep the 
-//velocity out using the distance field in order to solve the PDE.
-void World::velExtrapolate() {
-	//Initialize level set with merging spheres
-	//Reinitialization, solving the eikenol equation - fast first order
-	//Set boundary of +/- h/2
-	//sqrt(3)/2 *h for spheres
-	
-    //As a hack for now, just copy the values so that the invalid ones are a very large value
-    for(int i = 0; i < res[0]*res[1]; i++) {
-        phi[i] = std::numeric_limits<double>::infinity();
-        if(valid[i]) {
-            phi[i] = -h/2.0;
-        }
-    }
-    std::vector<char> tmpvalid = valid;
-    
-    //First sweep to extend distance field
-    distSweep(phi, tmpvalid, 20, 1e-12);
-    //Then sweep the velocities over that field solving delu dot delphi = 0
-    velSweep(vel, phi, 20, 1e-12);
-    
-    //TODO: Test only advecting where the object is
-    /// valid = tmpvalid;
-    //Test regular averaging
-    /// sweepAve(vel, 5);
-    
-    //Try Exact field
-    /// Vector2d middle = origin + h*Vector2d((res[0]-1)/2, (res[1]-1)/2);
-    /// for(int i = 0; i < res[0]; i++) {
-		/// for(int j = 0; j < res[1]; j++) {
-			/// /// if(valid[i*res[1]+j]) {
-				/// /// continue;
-			/// /// }
-			/// Vector2d pos = origin+h*Vector2d(i,j);
-			/// Vector2d ph = pos - middle;
-			/// Vector2d v(-ph(1), ph(0));
-			/// vel[i*res[1]+j] = 0.5*v;
-		/// }
-	/// }
-    
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-        //print phi
-        debug << "Phi field:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int ind = i*res[1]+j;
-                debug << phi[ind] << " ";
-            }
-            debug << "\n";
-        }
-        //print vel
-        debug << "\nExtrapolated Vel:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << vel[index](0) << "," << vel[index](1) << ") ";
-            }
-            debug << "\n";
-        }
-    }
-    /// debug.close();
-    /// std::exit(0);
-    #endif
-}
-
-//Advect material coordinates with new velocity
-//X = X - dt*D(v)*X
-///They might have switched v and X at the end so it would be
-///X = X - dt*D(X)*v
-void World::advect() {
-	//Passively move particles
-	#ifndef NDEBUG
-	double maxErr = 0;
-	for(int i = 0; i < (int)particles.size(); i++) {
-		Particle& p = particles[i];
-		//interpolate velocity field at position
-		Vector2d v = interpolate(p.x, vel, origin, res, h);
-		//move (Forward Euler)
-		if(stepNum % inc == 0) {
-			p.hist.push_back(p.x);
-		}
-		p.x += dt*v;
-	}
-	#endif
-    double alpha = 0;
-    for(int i = 0; i < res[0]; i++) {
-        for(int j = 0; j < res[1]; j++) {
-            int ind = i*res[1]+j;
-            if(!valid[ind]) {
-                #ifndef NDEBUG
-                dD[ind] = Matrix2d::Zero();
-                #endif
                 continue;
             }
-            Matrix2d D;
-            D = upwindJac(mat, i, j);
-            #ifndef NDEBUG
-            dD[ind] = D;
-            Matrix2d exactD;
-            if(cvalid[ind]) {
-				Rotation2D<double> rot(-0.785398-dt*0.5*elapsedTime);
-				exactD = rot.toRotationMatrix();
-			}
-			else {
-				exactD = Matrix2d::Identity();
-			}
-            double err = (D-exactD).norm();
-            if(err > maxErr) {
-				maxErr = err;
-			}
+
+            MatrixX nodalForcesFEM = MatrixX::Constant(DIM, QUAD, 0);
+            MatrixX stiffness = MatrixX::Constant(DIM*QUAD, DIM*QUAD, 0);
+            MatrixX coord(DIM, QUAD);
+            for (int i = 0; i < QUAD; i++) {
+                coord.col(i) = u[index + offsets[i]];
+            }
+            VectorN restPos(0, 0);
+            MatrixX Xloc(DIM, QUAD);
+            for (int i = 0; i < QUAD; i++) {
+                Xloc.col(i) = X[index + offsets[i]];
+                restPos += X[index + offsets[i]];
+            }
+            restPos /= QUAD;
+
+
+            MatrixN F;
+            double Jinv = 1.0 / computeF(coord, G, F);
+            materialInit(F);
+            MatrixN P = firstPiolaKirchhoff();
+            MatrixN cauchyStress = Jinv * P * F.transpose();
+
+            MatrixX pFpxhat = MatrixX::Constant(DIM*DIM, DIM*QUAD, 0);
+            computePFPxhat(F, G, pFpxhat);
+            MatrixX GF = G * F;
+            #if DIM == 3
+            nodalForcesFEM -= cauchyStress * G.transpose() * h * h * h;
+            #else
+            nodalForcesFEM -= cauchyStress * G.transpose() * h * h;
             #endif
-            double a = dt * std::max(std::abs(vel[ind](0))/h, std::abs(vel[ind](1))/h);
-            if(a > alpha) {
-                alpha = a;
-            }
-            //For testing override D to be exact.
-            //This should be equal to the deformation gradient
-            /// D = Matrix2d::Identity();
-            mat[ind] = mat[ind] - dt*D*vel[ind];
-        }
-    }
-    
-    if(alpha >= 1.0) {
-        printf("\nAlpha: %f\n", alpha);
-        printf("Frame %d, Step %d\n", stepNum/steps, stepNum%steps);
-        #ifndef NDEBUG
-        debug.close();
-        #endif
-        std::exit(0);
-    }
-    #ifndef NDEBUG
-    if(stepNum % inc == 0) {
-		std::ofstream eout("./euler/dx", std::ios_base::app | std::ios_base::out);
-		eout << maxErr << std::endl;
-		eout.close();
-	}
-    if(stepNum % inc == 0) {
-        debug << "\nDX: \n";
-        for(int j = res[1]-2; j >= 0; j--) {
-            for(int k = 0; k < 2; k++) {
-                for(int i = 0; i < res[0]-1; i++) {
-                    int ind = i*res[0]+j;
-                    if(i == 2 && j == 16) {
-						printf("%f %f\n", dD[ind](k, 0), dD[ind](k, 1));
-					}
-                    debug << "[";
-                    if(dD[ind](k,0) < 0) {
-                        debug << std::fixed << std::setprecision(6) << dD[ind](k,0);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dD[ind](k,0);
-                    }
-                    debug << ",";
-                    if(dD[ind](k,1) < 0) {
-                        debug << std::fixed << std::setprecision(6) << dD[ind](k,1);
-                    }
-                    else {
-                        debug << std::fixed << std::setprecision(6) << dD[ind](k,1);
-                    }
-                    debug << "] ";
+
+            for (int k = 0; k < DIM*QUAD; k++) {
+                int col = index + offsets[k / DIM];
+                if(mass[col] == 0) {
+                    continue;
                 }
-                debug << "\n";
+                MatrixN dF;
+                #if DIM == 3
+                dF(0, 0) = pFpxhat(0, k);
+                dF(0, 1) = pFpxhat(1, k);
+                dF(0, 2) = pFpxhat(2, k);
+                dF(1, 0) = pFpxhat(3, k);
+                dF(1, 1) = pFpxhat(4, k);
+                dF(1, 2) = pFpxhat(5, k);
+                dF(2, 0) = pFpxhat(6, k);
+                dF(2, 1) = pFpxhat(7, k);
+                dF(2, 2) = pFpxhat(8, k);
+                #else
+                dF(0, 0) = pFpxhat(0, k);
+                dF(0, 1) = pFpxhat(1, k);
+                dF(1, 0) = pFpxhat(2, k);
+                dF(1, 1) = pFpxhat(3, k);
+                #endif
+
+                MatrixN deltaP = firstPKDifferential(dF);
+                #if DIM == 3
+                MatrixX deltaForce = deltaP * GF.transpose() * Jinv * h * h * h;
+                #else
+                MatrixX deltaForce = deltaP * GF.transpose() * Jinv * h * h;
+                #endif
+                for (int m = 0; m < QUAD; m++) {
+                  stiffness(m * DIM, k) += deltaForce(0, m);
+                  stiffness(m * DIM + 1, k) += deltaForce(1, m);
+                  #if DIM == 3
+                  stiffness(m * DIM + 2, k) += deltaForce(2, m);
+                  #endif
+                }
             }
-            debug << "\n";
-        }
-        debug << "\n";
-        debug << "Material Advection:\n";
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                int index = i*res[1]+j;
-                debug << "(" << mat[index](0) << "," << mat[index](1) << ") ";
+
+            for (int k = 0; k < QUAD; k++) {
+                int idx = gridToSolid[index + offsets[k]];
+                if (idx >= 0) {
+                    localForce.segment<DIM>(idx * DIM) += nodalForcesFEM.col(k);
+                }
             }
-            debug << "\n";
+            for (int k = 0; k < DIM*QUAD; k++) {
+                int col = index + offsets[k / DIM];
+                if(mass[col] < EPS) {
+                    continue;
+                }
+                if(gridToSolid[col] < 0) {
+                    continue;
+                }
+                int newCol = gridToSolid[col] * DIM + k % DIM;
+                for(int l = 0; l < DIM*QUAD; l++) {
+                    int row = index + offsets[l / DIM];
+                    if(mass[row] < EPS) {
+                        continue;
+                    }
+                    if(gridToSolid[row] < 0) {
+                        continue;
+                    }
+                    int newRow = gridToSolid[row] * DIM + l % DIM;
+                    localMat.push_back(ETriplet(newRow, newCol, stiffness(l, k)));
+                }
+            }
         }
     }
-    debug.close();
-    std::exit(0);
+    tripletList.resize(localMat.size() + startSize);
+    std::vector<ETriplet>::iterator dest = tripletList.begin() + startSize;
+    std::copy(localMat.begin(), localMat.end(), dest);
+    solidUnitForce += localForce;
+}
+
+//Compute F and return the determinant
+double World::computeF(const MatrixX& coord, const MatrixX& pNpF, MatrixN& F) {
+    MatrixN Finv = MatrixN::Identity() - coord * pNpF;
+    double Jinv = Finv.determinant();
+    if(abs(Jinv) > 1e-4) {
+        F = Finv.inverse();
+    }
+    else {
+        F = MatrixN::Identity();
+        Jinv = 1.0;
+    }
+    return 1.0 / Jinv;
+}
+
+//Initalize Material. Decompose F for use in stress tensor
+//Keep R, S, L
+void World::materialInit(const MatrixN& F) {
+    svd(F, U, Fhat, V);
+    R = U * V.transpose();
+    S = V * Fhat * V.transpose();
+
+    MatrixN I = MatrixN::Identity();
+    MatrixN Ld = (mu * I) + (lambda * (Fhat - I).trace() - 2 * mu) * ((Fhat.trace() * I) - Fhat).inverse();
+
+    Ld(0, 0) = Ld(0, 0) > 0 ? Ld(0, 0) : 0;
+    Ld(1, 1) = Ld(1, 1) > 0 ? Ld(1, 1) : 0;
+    #if DIM == 3
+    Ld(2, 2) = Ld(2, 2) > 0 ? Ld(2, 2) : 0;
     #endif
+    L = V * Ld * V.transpose();
+}
+
+//Compute the Singular Value Decomposition of F into U * Fhat * VT
+//https://scicomp.stackexchange.com/questions/8899/robust-algorithm-for-2x2-svd
+void World::svd(const MatrixN& F, MatrixN& U, MatrixN& Fhat, MatrixN& V) {
+    // compute the SVD using a 2x2 specific algorithm
+    double A = (F(0, 0) + F(1, 1)) / 2.0;
+    double B = (F(0, 0) - F(1, 1)) / 2.0;
+    double C = (F(1, 0) + F(0, 1)) / 2.0;
+    double D = (F(1, 0) - F(0, 1)) / 2.0;
+
+    double Q = std::sqrt(A*A + D*D);
+    double R = std::sqrt(B*B + C*C);
+
+    double sx = Q + R;
+    double sy = Q - R;
+
+    double a1 = std::atan2(C, B);
+    double a2 = std::atan2(D, A);
+
+    double theta = (a2 - a1) / 2.0;
+    double phi = (a2 + a1) / 2.0;
+
+    //Sign of sy. 1 if >= 0, -1 otherwise
+    int S = (sy >= 0.0) ? 1 : -1;
+    //V is rotation by theta
+    V(0, 0) = V(1, 1) = std::cos(theta);
+    V(1, 0) = std::sin(theta);
+    V(0, 1) = -V(1, 0);
+
+    //U is a rotation by phi
+    U(0, 0) = std::cos(phi);
+    U(1, 1) = S * U(0, 0);
+    U(1, 0) = std::sin(phi);
+    U(0, 1) = -S * U(1, 0);
+
+    Fhat.setZero();
+    Fhat(0, 0) = sx;
+    Fhat(1, 1) = std::abs(sy);
+
+
+    //More standardized way
+    // MatrixN Fnormal3 = F.transpose() * F;
+    // Eigen::JacobiSVD<MatrixN> eigenSystem(Fnormal3, Eigen::ComputeFullV);
+    // VectorN eigenvalues = eigenSystem.singularValues();
+    // V = eigenSystem.matrixV();
+    //
+    // VectorN oEig = eigenvalues;
+    // MatrixN oV = V;
+    //
+    // // populate the diagonal
+    // Fhat.setZero();
+    // Fhat(0, 0) = std::sqrt(eigenvalues(0));
+    // Fhat(1, 1) = std::sqrt(eigenvalues(1));
+    // #if DIM == 3
+    // Fhat(2, 2) = std::sqrt(eigenvalues(2));
+    // #endif
+    //
+    // if(std::isnan(Fhat(0, 0))) Fhat(0, 0) = 0.0;
+    // if(std::isnan(Fhat(1, 1))) Fhat(1, 1) = 0.0;
+    // #if DIM == 3
+    // if(std::isnan(Fhat(2, 2))) Fhat(2, 2) = 0.0;
+    // #endif
+    //
+    // // if V is a reflection, multiply a column by -1
+    // // to ensure it is a rotation
+    // double detV = V.determinant();
+    // if (detV < 0.0) {
+    //     V(0, 0) *= -1.0;
+    //     V(1, 0) *= -1.0;
+    //     #if DIM == 3
+    //     V(2, 0) *= -1.0;
+    //     #endif
+    // }
+    //
+    // // compute U
+    // U.setZero();
+    // U(0, 0) = (Fhat(0, 0) > 0.0f) ? 1.0f / Fhat(0, 0) : 0.0f;
+    // U(1, 1) = (Fhat(1, 1) > 0.0f) ? 1.0f / Fhat(1, 1) : 0.0f;
+    // #if DIM == 3
+    // U(2, 2) = (Fhat(2, 2) > 0.0f) ? 1.0f / Fhat(2, 2) : 0.0f;
+    // #endif
+    // U = F * V * U;
+    // orthogonalizeU(U, Fhat);
+    //
+    // // correct any reflections in U to ensure it is a rotation
+    // if (F.determinant() < 0.0) removeUReflection(U, Fhat);
+}
+
+//First Piola Kirchhoff Stress Tensor
+MatrixN World::firstPiolaKirchhoff() {
+    MatrixN E = S - MatrixN::Identity();
+    MatrixN tmp = 2.0 * mu * E;
+    double tr = lambda * E.trace();
+    tmp(0, 0) += tr;
+    tmp(1, 1) += tr;
+    #if DIM == 3
+    tmp(2, 2) += tr;
+    #endif
+    return R * tmp;
+}
+
+MatrixN World::firstPKDifferential(const MatrixN& dF) {
+    MatrixN dFhat = R.transpose() * dF;
+    MatrixN dFsym = 0.5 * (dFhat + dFhat.transpose());
+    #if DIM == 3
+    MatrixN dFskew = 0.5 * (dFhat - dFhat.transpose());
+    #endif
+
+    MatrixN dPsym = (2 * mu * dFsym) + (lambda * dFsym.trace() * MatrixN::Identity());
+
+    #if DIM == 3
+    VectorN f(-dFskew(1, 2) + dFskew(2, 1), -dFskew(2, 0) + dFskew(0, 2), -dFskew(0, 1) + dFskew(1, 0));
+    #else
+    // VectorN f(-dFskew(1, 0) + dFskew(0, 1), dFskew(1, 0) - dFskew(0, 1));
+    #endif
+
+    double tr = lambda * dFhat.trace();
+    dPsym(0, 0) += tr;
+    dPsym(1, 1) += tr;
+    #if DIM == 3
+    dPsym(2, 2) += tr;
+    #endif
+
+    #if DIM == 3
+    MatrixN dPskew = crossMatrix(L*f);
+    #else
+    MatrixN dPskew = MatrixN::Zero();
+    #endif
+    //z axis is not doing anything so the skew would be 0.
+    //any part of dFskew(?,2) and dFskew(2,?) is going to be 0. f ends up with (0,0,x)
+    //L is 0 in 3rd dimention, so L*f is 0. cross product matrix is thus a matrix of 0
+    //Adding 0 doesn't change anything
+    MatrixN deltaP = dPsym + dPskew;
+    return R * deltaP;
+}
+
+#if DIM == 3
+MatrixN World::crossMatrix(const VectorN& vec) {
+    MatrixN final;
+    final(0, 0) = 0.0;
+    final(1, 0) = vec[2];
+    final(2, 0) = -vec[1];
+
+    final(0, 1) = -vec[2];
+    final(1, 1) = 0.0;
+    final(2, 1) = vec[0];
+
+    final(0, 2) = vec[1];
+    final(1, 2) = -vec[0];
+    final(2, 2) = 0.0;
+
+    return final;
+ }
+ #endif
+
+void World::computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxhat) {
+    MatrixX GF = pNpx * F;
+    for(int i = 0; i < QUAD; i++) {
+        for(int j = 0; j < DIM; j++) {
+            pFpxhat(j * DIM, i * DIM + j) = GF(i, 0);
+            pFpxhat(j * DIM + 1, i * DIM + j) = GF(i, 1);
+            #if DIM == 3
+            pFpxhat(j * DIM + 2, i * DIM + j) = GF(i, 2);
+            #endif
+        }
+    }
+}
+
+void World::computeMV() {
+    for(int i = xmin; i < xmax-1; i++) {
+        for(int j = ymin; j < ymax-1; j++) {
+            int index = i * res[1] + j;
+            int idx = gridToSolid[index];
+            if (idx >= 0) {
+              solidMv.segment<DIM>(idx * DIM) += mass[index] * velocity[index];
+            }
+        }
+    }
+}
+
+//Solve eq. 8 for the velocity from the forces
+void World::pcrImplicit() {
+    systemMatDiag = systemMat.diagonal();
+    solidUnitForce *= dt;
+    solidUnitForce += solidMv;
+    unitForce *= dt;
+    unitForce += mv;
+
+    // Eqn (8) in the paper
+    VectorX solidVelocity(solidUnitForce.size());
+    solvePCR(systemMat, solidUnitForce, solidVelocity, systemMatDiag);
+
+    vStar.conservativeResize(totalActiveCells * DIM);
+    for(int index = 0; index < totalCells; index++) {
+        int idx = gridToSolution[index];
+        if (idx < 0) {
+            continue;
+        }
+        int solidIdx = gridToSolid[index];
+        if(solidIdx < 0) {
+            vStar.segment<DIM>(idx*DIM) = unitForce.segment<DIM>(idx*DIM) * nzMassVecInv[idx*DIM];
+        }
+        else {
+            vStar.segment<DIM>(idx*DIM) = solidVelocity.segment<DIM>(solidIdx*DIM);
+        }
+    }
+}
+
+//Preconditioned Conjugate Residual Method
+//Preconditioned with Jacobi (M)
+bool World::solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M) {
+    double eps = 1e-3;
+    int maxIteration = 25;
+    x.conservativeResize(b.size());
+    x.setZero();
+
+    VectorX q, s, Ap, tmp, residual, direction;
+    q.conservativeResize(b.size());
+    q.setZero();
+    residual = b;
+
+    s.conservativeResize(b.size());
+    s.setZero();
+    direction.conservativeResize(b.size());
+    direction.setZero();
+    tmp.conservativeResize(b.size());
+    tmp.setZero();
+
+    ArrayN Ma = M.array();
+    direction = (residual.array() / Ma).matrix();
+    residual = direction;
+
+    s = A * residual;
+
+    Ap = s;
+
+    double deltaNew = residual.dot(s);
+
+    double bNorm = b.norm();
+
+    bool converged = false;
+    for (int i = 0; i < maxIteration && !converged; i++) {
+        q = (Ap.array() / Ma).matrix();
+
+        double alpha = Ap.dot(q);
+        if(fabs(alpha) > 0.0) {
+            alpha = deltaNew / alpha;
+        }
+
+        x += alpha * direction;
+
+        residual -= alpha * q;
+
+        s = A * residual;
+
+        double deltaOld = deltaNew;
+
+        deltaNew = residual.dot(s);
+
+        double beta = deltaNew / deltaOld;
+
+        direction *= beta;
+        direction += residual;
+
+        Ap *= beta;
+        Ap += s;
+
+        if(i > 0 && i % 5 == 0) {
+            tmp = A * x;
+            tmp -= b;
+            double tmpNorm = tmp.norm();
+            if(tmpNorm < eps * bNorm) {
+                converged = true;
+                break;
+            }
+        }
+    }
+    return converged;
+}
+
+void World::finalizeSolution() {
+    //Copy new velocity to grid
+    for(int i = 0; i < totalCells; i++) {
+        int idx = gridToSolution[i];
+        if(idx >= 0) {
+            velocity[idx] = vStar.segment<DIM>(idx * DIM);
+        }
+    }
+    //extend velocity field
+    for (int i = 0; i < totalCells; i++) {
+        u[i] += velocity[i] * dt;
+    }
+    advectField(u, vecWorkspace);
+    //update solid displacements
+    // Adjust boundary displacement
+    for(int i = xmin; i < xmax; i++) {
+        u[i*res[1]+ymin] = 2 * u[i*res[1]+(ymin+1)] - u[i*res[1]+(ymin+2)];
+        u[i*res[1]+(ymax-1)] = 2 * u[i*res[1]+(ymax-2)] - u[i*res[1]+(ymax-3)];
+    }
+    for(int j = ymin; j < ymax; j++) {
+        u[xmin*res[1]+j] = 2 * u[(xmin+1)*res[1]+j] - u[(xmin+2)*res[1]+j];
+        u[(xmax-1)*res[1]+j] = 2 * u[(xmax-2)*res[1]+j] - u[(xmax-3)*res[1]+j];
+    }
+
+    // Recover material position field
+    int index = 0;
+    for(int x = 0; x < res[0]; x++) {
+        for(int y = 0; y < res[1]; y++, index++) {
+            VectorN pos(x * h, y * h);
+            pos += origin - u[index];
+            X[index] = pos;
+        }
+    }
+    vecWorkspace = velocity;
+    //compute solid masses
+    computeSolidMass(true);
+    //advect surface mesh
+
+    //compute SDF
+    computeSDF();
+    //gather solid masses
+    gatherSolidMasses();
+    //boundary conditions
+    for(int x = 0; x < res[0]; x++) {
+        velocity[x*res[1]+0].setZero();
+        velocity[x*res[1]+(res[1]-1)].setZero();
+    }
+    for(int y = 0; y < res[1]; y++) {
+        velocity[0*res[1]+y].setZero();
+        velocity[(res[0]-1)*res[1]+y].setZero();
+    }
+}
+
+void World::computeSDF() {
+    double large_distance = res[0] + res[1] + 2;
+
+    xmax = ymax = 0;
+    xmin = res[0];
+    ymin = res[1];
+
+    phi = std::vector<double>(res[0]*res[1], large_distance);
+
+    int index = 0;
+    for(int x = 0; x < res[0]; x++) {
+        for(int y = 0; y < res[1]; y++, index++) {
+            if(mass[index] > EPS) {
+                valid[index] = 1;
+                phi[index] = -0.5;
+                if(x < xmin) {
+                    xmin = x;
+                }
+                if(x > xmax) {
+                    xmax = x;
+                }
+                if(y < ymin) {
+                    ymin = y;
+                }
+                if(y > ymax) {
+                    ymax = y;
+                }
+            }
+            else {
+                valid[index] = 0;
+            }
+        }
+    }
+
+    //Number of cells to extend the boarder
+    int tightBorder = 3;
+    int extrap = 20;
+
+    #if DIM == 3
+    tightMin = VectorI(std::max(xmin - tightBorder, 0), std::max(ymin - tightBorder, 0), std::max(zmin - tightBorder, 0));
+    tightMax = VectorI(std::min(xmax + tightBorder, res[0]), std::min(ymax + tightBorder, res[1]), std::min(zmax + tightBorder, zRes));
+    #else
+    tightMin = VectorI(std::max(xmin - tightBorder, 0), std::max(ymin - tightBorder, 0));
+    tightMax = VectorI(std::min(xmax + tightBorder, res[0]), std::min(ymax + tightBorder, res[1]));
+    #endif
+
+    xmin = std::max(xmin - extrap, 0);
+    ymin = std::max(ymin - extrap, 0);
+    #if DIM == 3
+    zmin = std::max(zmin - extrap, 0);
+    #endif
+
+    xmax = std::min(xmax + extrap, res[0]);
+    ymax = std::min(ymax + extrap, res[1]);
+    #if DIM == 3
+    zmax = std::min(zmax + extrap, res[2]);
+    #endif
+
+    //Sweep in 4 directions twice, so 8 iterations
+    distSweep(phi, valid, 8, 1e-6);
+}
+
+void World::advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace) {
+    for(int x = 0; x < res[0]; x++) {
+        for (int y = 0; y < res[1]; y++) {
+            int index = x * res[1] + y;
+            VectorN node(x, y);
+            node = node * h + origin;
+            VectorN newPos = node - velocity[index] * dt;
+            workspace[index] = interpolate_value(newPos, field, origin, res, h);
+        }
+    }
+    field.swap(workspace);
+}
+
+void World::computeSolidMass(bool usesdf) {
+    mass = std::vector<double>(totalCells, 0);
+    valid = std::vector<char>(totalCells, 0);
+    detFInv = std::vector<double>(totalCells, 0);
+    quarterVolumeFractions.setZero();
+
+    double subsampleVolume = subsampleDh * subsampleDh;
+    int massSampleRes = h / subsampleDh;
+    int halfMassSampleRes = massSampleRes >> 1;
+    double fraction = 1.0 / (massSampleRes * massSampleRes);
+
+    for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
+        for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
+            int index = x * res[1] + y;
+            MatrixX coord(DIM, QUAD);
+            for(int i = 0; i < QUAD; i++) {
+                coord.col(i) = u[index + offsets[i]];
+            }
+            MatrixN F;
+            detFInv[index] = std::abs(1.0 / computeF(coord, G, F));
+        }
+    }
+
+    for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
+        for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
+            int index = x * res[1] + y;
+            VectorN node(x*h+origin(0), y*h+origin(1));
+            if(usesdf && phi[index] > 2.0) {
+                continue;
+            }
+            for(int p = 0; p < massSampleRes; p++) {
+                for(int q = 0; q < massSampleRes; q++) {
+                    VectorN pos = node + VectorN((p+0.5)*subsampleDh, (q+0.5)*subsampleDh);
+                    VectorN rPos = interpolate_value(pos, X, origin, res, h);
+                    double d = interpolate_value(rPos, restMass, origin, res, h) * subsampleVolume;
+                    if(d < 1e-6) {
+                        continue;
+                    }
+                    int offset = p < halfMassSampleRes ? 0 : 1;
+                    offset += q < halfMassSampleRes ? 0 : 2;
+                    quarterVolumeFractions[index*QUAD+offset] += fraction;
+                }
+            }
+            double sum = 0;
+            for(int i = 0; i < QUAD; i++) {
+                sum += quarterVolumeFractions[index*QUAD+i];
+            }
+            double threshold = 0.5;
+            if(sum > threshold) {
+                for(int i = 0; i < QUAD; i++) {
+                    quarterVolumeFractions[index*QUAD+i] = 1;
+                }
+                valid[index] = 1;
+            }
+            else {
+                if(sum > EPS) {
+                    valid[index] = 2;
+                }
+                for(int i = 0; i < QUAD; i++) {
+                    quarterVolumeFractions[index*QUAD+i] = 0;
+                }
+            }
+        }
+    }
+
+    for(int i = 0; i < QUAD; i++) {
+        for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
+            for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
+                int index = x * res[1] + y;
+                if(!valid[index]) {
+                    continue;
+                }
+                mass[index+offsets[i]] += quarterVolumeFractions[index*QUAD+i] * detFInv[index] * quarterCellSolidMass;
+            }
+        }
+    }
+}
+
+void World::gatherSolidMasses() {
+    // nodeSolidVolumeFraction.clear();
+    //
+    // for (int i = 0; i < QUAD; i++) {
+    //     for (int x = 1; x < res[0] - 1; x++) {
+    //         for (int y = 1; y < res[1] - 1; y++) {
+    //             int index = x*res[1]+y;
+    //             nodeSolidVolumeFraction[index+offsets[i]] += quarterVolumeFractions[index*QUAD+i];
+    //         }
+    //     }
+    // }
+    // for(int i = 0; i < (int)nodeSolidVolumeFraction.size(); i++) {
+    //     nodeSolidVolumeFraction[i] *= 0.125;
+    // }
+
+    gridToSolid.resize(totalCells, -1);
+    int idx = 0;
+    for(int x = 1; x < res[0] - 1; x++) {
+        for (int y = 1; y < res[1] - 1; y++) {
+            int index = x*res[1]+y;
+            if(mass[index] > 0) {
+                gridToSolid[index] = idx++;
+            }
+            else {
+                gridToSolid[index] = -1;
+            }
+        }
+    }
+    totalSolidCells = idx;
 }
 
 /************************
  * Helpers
  ************************/
-Matrix2d World::upwindJac(Vector2d* field, int i, int j, bool boundary) {
-    //Compute D(field) with upwinding scheme
-    int index = i*res[1]+j;
-    int xp1 = (i+1)*res[1]+j;
-    int xm1 = (i-1)*res[1]+j;
-    int yp1 = i*res[1]+(j+1);
-    int ym1 = i*res[1]+(j-1);
-    //DX
-    int di = 2, dj = 16;
-    //Dv
-    /// int di = 31, dj = 48;
-    if(i == di && j == dj) {
-		printf("(i, j): (%f, %f), index: %d\n", field[index](0), field[index](1), (int)valid[index]);
-		printf("(i+1, j): (%f, %f), xp1: %d\n", field[xp1](0), field[xp1](1), (int)valid[xp1]);
-		printf("(i-1, j): (%f, %f), xm1: %d\n", field[xm1](0), field[xm1](1), (int)valid[xm1]);
-		printf("(i, j+1): (%f, %f), yp1: %d\n", field[yp1](0), field[yp1](1), (int)valid[yp1]);
-		printf("(i, j-1): (%f, %f), ym1: %d\n", field[ym1](0), field[ym1](1), (int)valid[ym1]);
-	}
-    double xx = 0, xy = 0, yx = 0, yy = 0;      //Upwind scheme so look at each value individually
-    if(vel[index](0) >= 0) {    //X Velocity is positive, so moving from left to right, look left
-		if(i == di && j == dj) {
-			printf("Look X -1\n");
-		}
-        if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {  //Looking backwards in x and valid value
-			xx = (field[index](0) - field[xm1](0)) / h;
-			if(i == di && j == dj) {
-				printf("xx1: (%f - %f) / %f = %f\n", field[index](0), field[xm1](0), h, xx);
-			}
-        }
-        else if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)){  //Can't look backwards in x so do forward difference instead
-			xx = (field[xp1](0) - field[index](0)) / h;
-			if(i == di && j == dj) {
-				printf("xx2: (%f - %f) / %f = %f\n", field[xp1](0), field[index](0), h, xx);
-			}
-        }
-        
-        if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {  //Looking backwards in y and valid value
-			xy = (field[index](0) - field[ym1](0)) / h;
-			if(i == di && j == dj) {
-				printf("xy1: (%f - %f) / %f = %f\n", field[index](0), field[ym1](0), h, xy);
-			}
-        }
-        else if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {  //Can't look backwards in y so do forward difference instead
-			xy = (field[yp1](0) - field[index](0)) / h;
-			if(i == di && j == dj) {
-				printf("xy2: (%f - %f) / %f = %f\n", field[yp1](0), field[index](0), h, xy);
-			}
-        }
-    }
-    else {                          //X Velocity is negative, so forward difference
-		if(i == di && j == dj) {
-			printf("Look X +1\n");
-		}
-        if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
-			xx = (field[xp1](0) - field[index](0)) / h;
-			if(i == di && j == dj) {
-				printf("xx3: (%f - %f) / %f = %f\n", field[xp1](0), field[index](0), h, xx);
-			}
-        }
-        else if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
-			xx = (field[index](0) - field[xm1](0)) / h;
-			if(i == di && j == dj) {
-				printf("xx4: (%f - %f) / %f = %f\n", field[index](0), field[xm1](0), h, xx);
-			}
-        }
-        
-        if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
-			xy = (field[yp1](0) - field[index](0)) / h;
-			if(i == di && j == dj) {
-				printf("xy3: (%f - %f) / %f = %f\n", field[yp1](0), field[index](0), h, xy);
-			}
-        }
-        else if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
-			xy = (field[index](0) - field[ym1](0)) / h;
-			if(i == di && j == dj) {
-				printf("xy4: (%f - %f) / %f = %f\n", field[index](0), field[ym1](0), h, xy);
-			}
-        }
-    }
-    if(vel[index](1) >= 0) {    //Y Velocity is positive, so backward difference
-		if(i == di && j == dj) {
-			printf("Look Y -1\n");
-		}
-        if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
-			yx = (field[index](1) - field[xm1](1)) / h;
-			if(i == di && j == dj) {
-				printf("yx1: (%f - %f) / %f = %f\n", field[index](1), field[xm1](1), h, yx);
-			}
-        }
-        else if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
-			yx = (field[xp1](1) - field[index](1)) / h;
-			if(i == di && j == dj) {
-				printf("yx2: (%f - %f) / %f = %f\n", field[xp1](1), field[index](1), h, yx);
-			}
-        }
-        
-        if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
-			yy = (field[index](1) - field[ym1](1)) / h;
-			if(i == di && j == dj) {
-				printf("yy1: (%f - %f) / %f = %f\n", field[index](1), field[ym1](1), h, yy);
-			}
-        }
-        else if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
-			yy = (field[yp1](1) - field[index](1)) / h;
-			if(i == di && j == dj) {
-				printf("yy2: (%f - %f) / %f = %f\n", field[yp1](1), field[index](1), h, yy);
-			}
-        }
-    }
-    else {                          //Y Velocity is negative, so forward difference
-		if(i == di && j == dj) {
-			printf("Look Y +1\n");
-		}
-        if((i != res[0]-1) && ((boundary && valid[xp1]) || !boundary)) {
-			yx = (field[xp1](1) - field[index](1)) / h;
-			if(i == di && j == dj) {
-				printf("yx3: (%f - %f) / %f = %f\n", field[xp1](1), field[index](1), h, yx);
-			}
-        }
-        else if((i != 0) && ((boundary && valid[xm1]) || !boundary)) {
-			yx = (field[index](1) - field[xm1](1)) / h;
-			if(i == di && j == dj) {
-				printf("yx4: (%f - %f) / %f = %f\n", field[index](1), field[xm1](1), h, yx);
-			}
-        }
-        
-        if((j != res[1]-1) && ((boundary && valid[yp1]) || !boundary)) {
-			yy = (field[yp1](1) - field[index](1)) / h;
-			if(i == di && j == dj) {
-				printf("yy3: (%f - %f) / %f = %f\n", field[yp1](1), field[index](1), h, yy);
-			}	
-        }
-        else if((j != 0) && ((boundary && valid[ym1]) || !boundary)) {
-			yy = (field[index](1) - field[ym1](1)) / h;
-			if(i == di && j == dj) {
-				printf("yy4: (%f - %f) / %f = %f\n", field[index](1), field[ym1](1), h, yy);
-			}
-        }
-    }
-    Matrix2d D;
-    D << xx, xy, yx, yy;
-    return D;
-}
 
-void World::distSweep(double *field, std::vector<char> initial, int iters, double eps) {
+void World::distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps) {
     double err = 100;
     int it = 0;
     while(it < iters && err > eps) {
@@ -1666,7 +1438,7 @@ void World::distSweep(double *field, std::vector<char> initial, int iters, doubl
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 //[(x-a)+]^2 + [(x-b)+]^2 = f^2 * h^2
                 //a = u_xmin
                 //b = u_ymin
@@ -1689,7 +1461,7 @@ void World::distSweep(double *field, std::vector<char> initial, int iters, doubl
                 else {
                     b = std::min(field[yp1], field[ym1]);
                 }
-                
+
                 double f = 1;
                 double fh = f*h;            //Seeing what happens with f=1
                 //Eq 2.4
@@ -1701,10 +1473,10 @@ void World::distSweep(double *field, std::vector<char> initial, int iters, doubl
                 else {
                     xbar = (a+b+std::sqrt(2*f*f*h*h-ab*ab)) / 2;
                 }
-                
+
                 double prevVal = field[index];
                 field[index] = std::min(field[index], xbar);
-                
+
                 //Keep the max change
                 double currDif = prevVal - field[index];
                 if(currDif > err) {
@@ -1768,7 +1540,7 @@ void World::velSweep(Vector2d *vel, double *field, int iters, double eps) {
                 int xm1 = (i-1)*res[1]+j;
                 int yp1 = i*res[1]+(j+1);
                 int ym1 = i*res[1]+(j-1);
-                
+
                 //(Fxmin*(phix-phixmin) + Fymin*(phix-phiymin)) / ((phix-phixmin) + (phix-phiymin))
                 double a, b;
                 Vector2d vi, vj;
@@ -1808,7 +1580,7 @@ void World::velSweep(Vector2d *vel, double *field, int iters, double eps) {
                         vj = vel[ym1];
                     }
                 }
-                
+
                 //If neither values are less than x_ij then the contribution is 0
                 double phixi = 0, phixj = 0;
                 if(field[index] > a) {
@@ -1834,80 +1606,6 @@ void World::velSweep(Vector2d *vel, double *field, int iters, double eps) {
     valid = newvalid;
 }
 
-void World::sweepAve(Eigen::Vector2d *vel, int iters) {
-    std::vector<char> oldValid;
-    oldValid.resize(res[0]*res[1]);
-    //Perform this a couple of times
-    int it = 0;
-    while(it < iters) {
-        oldValid = valid;
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                int ind = i*res[1]+j;
-                int xp1 = (i+1)*res[1]+j;
-                int xm1 = (i-1)*res[1]+j;
-                int yp1 = i*res[1]+(j+1);
-                int ym1 = i*res[1]+(j-1);
-                
-                Vector2d sum(0,0);
-                int count = 0;
-                
-                tmpVel[ind] = vel[ind];
-                //Only check around cells that are not already valid
-                if(!oldValid[ind]) {
-                    if(i+1 < res[0] && oldValid[xp1]) {
-                        sum += vel[xp1];
-                        count++;
-                    }
-                    if(i-1 >= 0 && oldValid[xm1]) {
-                        sum += vel[xm1];
-                        count++;
-                    }
-                    if(j+1 < res[1] && oldValid[yp1]) {
-                        sum += vel[yp1];
-                        count++;
-                    }
-                    if(j-1 >= 0 && oldValid[ym1]) {
-                        sum += vel[ym1];
-                        count++;
-                    }
-                    if(i+1 < res[0] && j+1 < res[1] && oldValid[(i+1)*res[1]+(j+1)]) {
-                        sum += vel[(i+1)*res[1]+(j+1)];
-                        count++;
-                    }
-                    if(i+1 < res[0] && j-1 >=0 && oldValid[(i+1)*res[1]+(j-1)]) {
-                        sum += vel[(i+1)*res[1]+(j-1)];
-                        count++;
-                    }
-                    if(i-1 >= 0 && j+1 < res[1] && oldValid[(i-1)*res[1]+(j+1)]) {
-                        sum += vel[(i-1)*res[1]+(j+1)];
-                        count++;
-                    }
-                    if(i-1 >= 0 && j-1 >= 0 && oldValid[(i-1)*res[1]+(j-1)]) {
-                        sum += vel[(i-1)*res[1]+(j-1)];
-                        count++;
-                    }
-                    
-                    //If neighboring cells were valid, average the values
-                    if(count > 0) {
-                        tmpVel[ind] = sum / count;
-                        valid[ind] = 1;
-                    }
-                }
-            }
-        }
-        //Replace grid with temp grid
-        for(int i = 0; i < res[0]; i++) {
-            for(int j = 0; j < res[1]; j++) {
-                int ind = i*res[1]+j;
-                vel[ind] = tmpVel[ind];
-            }
-        }
-        it++;
-    }
-}
-
-
 void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	Partio::ParticlesDataMutable *data = Partio::create();
 	Partio::ParticleAttribute xattr;
@@ -1932,7 +1630,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->addAttribute("mass", Partio::FLOAT, 1);
 	data->addAttribute("rho", Partio::FLOAT, 1);
 	data->addAttribute("vol", Partio::FLOAT, 1);
-	
+
     data->attributeInfo("rest", xoattr);
 	data->attributeInfo("position", xattr);
 	data->attributeInfo("velocity", uattr);
@@ -2078,4 +1776,4 @@ World::~World() {
     /// delete [] stress;
     /// delete [] F;
     prof.dump<std::chrono::duration<double>>(std::cout);
-} 
+}
