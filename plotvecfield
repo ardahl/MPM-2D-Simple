@@ -1,0 +1,1 @@
+plot 'vel30' using 1:2:3:4:(rgb($5,$6,$7)) with vectors lc rgb variable

@@ -1,0 +1,11 @@
+set terminal png
+
+system('rm -r col*.png')
+list = system('ls col[0-9]*')
+
+set size square
+
+do for [file in list] {
+    set output sprintf('%s.png', file)
+    plot file using 1:2:3:4:5 with rgbimage
+}

@@ -17,6 +17,7 @@ std::ofstream debug;
 #endif
 
 World::World(std::string config) {
+    Eigen::initParallel();
     stepNum = 0;
     elapsedTime = 0.0;
     filename = config;
@@ -34,6 +35,8 @@ World::World(std::string config) {
 
     Vector3d c;
     std::string str, objType = "square";
+
+    testVel = root.get("testVel", -1).asInt();
 
     int frames = root.get("frames", 30).asInt();
     auto dtIn = root["dt"];
@@ -351,19 +354,15 @@ World::World(std::string config) {
     vecWorkspace = std::vector<VectorN>(totalCells);
     phi = std::vector<double>(totalCells);
     detFInv = std::vector<double>(totalCells);
-    gridToSolution = std::vector<int>(totalCells);
+    gridToSolution = std::vector<int>(totalCells, -1);
     gridToSolid = std::vector<int>(totalCells);
     tripletList = std::vector<ETriplet>(totalCells);
     restMass = std::vector<double>(totalCells, 0);
     nodeSolidVolumeFraction = std::vector<double>(totalCells);
 
-    vStar = VectorX(totalCells);                           //updated velocity from forces solve
-    mv = VectorX(totalCells);
-    solidMv = VectorX(totalCells);
-    unitForce = VectorX(totalCells);
-    solidUnitForce = VectorX(totalCells);
-    nzMassVec = VectorX(totalCells);
-    nzMassVecInv = VectorX(totalCells);
+    vStar = VectorX(DIM*totalCells);                           //updated velocity from forces solve
+    solidMv = VectorX(DIM*totalCells);
+    solidUnitForce = VectorX(DIM*totalCells);
     dampedMass = VectorX(totalCells);
     quarterVolumeFractions = VectorX(QUAD*totalCells);
 
@@ -383,14 +382,22 @@ World::World(std::string config) {
 
     inc = steps;
     #ifndef NDEBUG
-    inc = 1;
+    inc = 50000;
+    // inc = 1;
     count = 0;
-    sMax = 11;
+    sMax = 31;
     matTrans = new Vector2d*[sMax];
     for(int i = 0; i < sMax; i++) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
     }
     #endif
+}
+
+World::~World() {
+    std::cout << "\n\nTimes:\n";
+    prof.dump<std::chrono::duration<double>>(std::cout);
+    std::cout << "Percentage:\n";
+    prof.dumpPercentages(std::cout);
 }
 
 inline Vector3d interpolate(VectorN point, std::vector<Vector3d> field, Vector3d bg, VectorN origin, int res[2], double h) {
@@ -529,8 +536,25 @@ void World::init() {
             // X[index] = rpos + center;
             X[index] = pos;
             // color[index] = Vector3d(135,206,255);
-            // velocity[index] = 0.5*Vector2d(-ph(1), ph(0));
-            velocity[index] = VectorN::Zero();
+            ///Rotation
+            if(testVel == 0) {
+                if(i == 0 && j == 0) {
+                    printf("Vel: Rotation\n");
+                }
+                velocity[index] = 1.5*Vector2d(-ph(1), ph(0));
+            }
+            else if(testVel == 1) { ///Linear
+                if(i == 0 && j == 0) {
+                    printf("Vel: Linear\n");
+                }
+                velocity[index] = 1.5*VectorN(1, 0);
+            }
+            else { ///None
+                if(i == 0 && j == 0) {
+                    printf("Vel: None\n");
+                }
+                velocity[index] = VectorN::Zero();
+            }
             //Create a square in the center
             /// if(i >= (res[0]/2)-4 && i <= (res[0]/2)+4 && j >= (res[1]/2)-4 && j <= (res[1]/2)+4) {
             if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {	//circle
@@ -576,7 +600,8 @@ void World::init() {
     computeSDF();
 
     gatherSolidMasses();
-    gridToSolution.resize(totalCells, -1);
+    // gridToSolution.resize(totalCells, -1);
+    gridToSolution = std::vector<int>(totalCells, -1);
     int idx = 0;
     for (int x = 1; x < res[0] - 1; x++) {
         for (int y = 1; y < res[1] - 1; y++) {
@@ -610,59 +635,85 @@ void World::step() {
             }
         }
         colout.close();
+        std::ofstream vout("./euler/vel0");
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                Vector2d p = origin+h*Vector2d(i,j);
+                int ind = i*res[1]+j;
+                vout << p(0) << " " << p(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " 0 0 255" << "\n";
+            }
+        }
+        vout.close();
         printf("Total Cells: %d\n", totalCells);
         printf("Total Active Cells: %d\n", totalActiveCells);
         printf("Total Solid Cells: %d\n", totalSolidCells);
-        std::exit(0);
     }
     //Reset and resize variables
-    mv.conservativeResize(totalActiveCells * DIM);
-    unitForce.conservativeResize(totalActiveCells * DIM);
-    unitForce.setZero();
-    nzMassVec.conservativeResize(totalActiveCells * DIM);
-    nzMassVecInv.conservativeResize(totalActiveCells * DIM);
-
     solidUnitForce.conservativeResize(totalSolidCells * DIM);
     solidUnitForce.setZero();
     solidMv.conservativeResize(totalSolidCells * DIM);
     solidMv.setZero();
     dampedMass.conservativeResize(totalSolidCells * DIM);
     dampedMass.setZero();
+    tripletList.clear();
     //Compute F and Stiffness Matrix
+    {
+    auto timer = prof.timeName("ComputeKf");
     computeKf();
+    }
     //Compute mv
+    {
+    auto timer = prof.timeName("computeMV");
     computeMV();
+    }
+    // for(int i = 0; i < (int)mass.size(); i++) {
+    //     printf("%f, %d, %d\n", mass[i], gridToSolid[i], gridToSolution[i]);
+    // }
+    // std::exit(0);
     //Mass part of rayleigh damping
+    {
+    auto timer = prof.timeName("Body Forces");
     double massDamp = 1 + dt * rayleighAlpha;
     //Compute body Forces
+    #pragma omp parallel for schedule(static) collapse(2)
     for(int i = 1; i < res[0]-1; i++) {
         for(int j = 1; j < res[1]-1; j++) {
             int index = i*res[1]+j;
-            int idx = gridToSolution[index];
+            // int idx = gridToSolution[index];
             int solidIdx = gridToSolid[index];
             double m = mass[index];
 
             if(solidIdx < 0) {
-                unitForce.segment<DIM>(idx*DIM) += m * gravity;
-                //Not sure what the nz means
-                nzMassVec[idx * DIM] = nzMassVec[idx * DIM + 1] = m;
-                #if DIM == 3
-                nzMassVec[idx * DIM + 2] = mass;
-                #endif
+                // unitForce.segment<DIM>(idx*DIM) += m * gravity;
             }
             else {
                 dampedMass[solidIdx * DIM] = dampedMass[solidIdx * DIM + 1] = m * massDamp;
                 #if DIM == 3
                 dampedMass[solidIdx * DIM + 2] = m * massDamp;
                 #endif
-                solidUnitForce.segment<DIM>(solidIdx * DIM) += m * gravity;
+                if(rotationEnabled) {
+                    VectorN d = (origin+h*Vector2d(i,j)) - center;
+                    solidUnitForce.segment<DIM>(solidIdx * DIM) += m * rotation * VectorN(-d(1), d(0));
+                }
+                if(gravityEnabled) {
+                    solidUnitForce.segment<DIM>(solidIdx * DIM) += m * gravity;
+                }
             }
-            nzMassVecInv[idx * DIM] = nzMassVecInv[idx * DIM + 1] = 1.0 / m;
-            #if DIM == 3
-            nzMassVecInv[idx * DIM + 2] = 1.0 / m;
-            #endif
         }
     }
+    std::ofstream fout("./euler/frc"+std::to_string(stepNum/inc));
+    for(int i = 0; i < res[0]; i++) {
+        for(int j = 0; j < res[1]; j++) {
+            Vector2d p = origin+h*Vector2d(i,j);
+            int ind = i*res[1]+j;
+            Vector3i col(255, 0, 0);
+            if(gridToSolid[ind] >= 0) {
+                int idx = gridToSolid[ind];
+                fout << p(0) << " " << p(1) << " " << solidUnitForce.segment<DIM>(idx*DIM)(0) << " " << solidUnitForce.segment<DIM>(idx*DIM)(1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
+            }
+        }
+    }
+    fout.close();
     //Construct global system matrix
     systemMat.resize(totalSolidCells*DIM, totalSolidCells*DIM);
     systemMat.setFromTriplets(tripletList.begin(), tripletList.end());
@@ -671,11 +722,17 @@ void World::step() {
         systemMat.coeffRef(i, i) += dampedMass[i];
     }
     systemMat.makeCompressed();
+    }
     //Do PCR (conjugate residual) solve
+    {
+    auto timer = prof.timeName("PCR");
     pcrImplicit();
+    }
     //finalize solution
+    {
+    auto timer = prof.timeName("Finalize");
     finalizeSolution();
-
+    }
     stepNum++;
 	elapsedTime += dt;
 
@@ -690,6 +747,19 @@ void World::step() {
             }
         }
         colout.close();
+        std::ofstream vout("./euler/vel"+std::to_string(stepNum/inc));
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                Vector2d p = origin+h*Vector2d(i,j);
+                int ind = i*res[1]+j;
+                Vector3i col(255, 0, 0);
+                // if(cvalid[i*res[1]+j]) {
+                //     col = Vector3i(0, 0, 255);
+                // }
+                vout << p(0) << " " << p(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
+            }
+        }
+        vout.close();
 
         #ifndef NDEBUG
         for(int i = 0; i < res[0]; i++) {
@@ -702,15 +772,19 @@ void World::step() {
             std::ofstream mats("./euler/mats.txt");
             for(int i = 0; i < res[0]; i++) {
                 for(int j = 0; j < res[1]; j++) {
-                    if(valid[i*res[1]+j]) {
+                    // if(valid[i*res[1]+j]) {
                         for(int k = 0; k < sMax; k++) {
                             mats << matTrans[k][i*res[1]+j](0) << " " << matTrans[k][i*res[1]+j](1) << " " << k << "\n";
                         }
                         mats << "\n\n";
-                    }
+                    // }
                 }
             }
             mats.close();
+            std::cout << "\n\nTimes:\n";
+            prof.dump<std::chrono::duration<double>>(std::cout);
+            std::cout << "Percentage:\n";
+            prof.dumpPercentages(std::cout);
             std::exit(0);
         }
         #endif
@@ -882,8 +956,20 @@ void World::svd(const MatrixN& F, MatrixN& U, MatrixN& Fhat, MatrixN& V) {
     double sx = Q + R;
     double sy = Q - R;
 
-    double a1 = std::atan2(C, B);
-    double a2 = std::atan2(D, A);
+    double a1, a2;
+    //Safeguard against atan2(0, 0) = NaN
+    if(std::abs(C) < 1e-12 && std::abs(B) < 1e-12) {
+        a1 = 0;
+    }
+    else {
+        a1 = std::atan2(C, B);
+    }
+    if(std::abs(D) < 1e-12 && std::abs(A) < 1e-12) {
+        a2 = 0;
+    }
+    else {
+        a2 = std::atan2(D, A);
+    }
 
     double theta = (a2 - a1) / 2.0;
     double phi = (a2 + a1) / 2.0;
@@ -1035,6 +1121,7 @@ void World::computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxh
 }
 
 void World::computeMV() {
+    #pragma omp parallel for schedule(static)
     for(int i = xmin; i < xmax-1; i++) {
         for(int j = ymin; j < ymax-1; j++) {
             int index = i * res[1] + j;
@@ -1051,14 +1138,14 @@ void World::pcrImplicit() {
     systemMatDiag = systemMat.diagonal();
     solidUnitForce *= dt;
     solidUnitForce += solidMv;
-    unitForce *= dt;
-    unitForce += mv;
 
     // Eqn (8) in the paper
     VectorX solidVelocity(solidUnitForce.size());
+    solidVelocity.setZero();
     solvePCR(systemMat, solidUnitForce, solidVelocity, systemMatDiag);
 
     vStar.conservativeResize(totalActiveCells * DIM);
+    #pragma omp parallel for schedule(static)
     for(int index = 0; index < totalCells; index++) {
         int idx = gridToSolution[index];
         if (idx < 0) {
@@ -1066,10 +1153,11 @@ void World::pcrImplicit() {
         }
         int solidIdx = gridToSolid[index];
         if(solidIdx < 0) {
-            vStar.segment<DIM>(idx*DIM) = unitForce.segment<DIM>(idx*DIM) * nzMassVecInv[idx*DIM];
+            vStar.segment<DIM>(idx*DIM) = VectorN::Zero();
         }
         else {
             vStar.segment<DIM>(idx*DIM) = solidVelocity.segment<DIM>(solidIdx*DIM);
+            // printf("S, %d: (%f, %f) = (%f, %f)\n", idx, vStar.segment<DIM>(idx*DIM)(0), vStar.segment<DIM>(idx*DIM)(1), solidVelocity.segment<DIM>(solidIdx*DIM)(0), solidVelocity.segment<DIM>(solidIdx*DIM)(1));
         }
     }
 }
@@ -1079,31 +1167,18 @@ void World::pcrImplicit() {
 bool World::solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M) {
     double eps = 1e-3;
     int maxIteration = 25;
-    x.conservativeResize(b.size());
-    x.setZero();
 
-    VectorX q, s, Ap, tmp, residual, direction;
-    q.conservativeResize(b.size());
-    q.setZero();
     residual = b;
 
-    s.conservativeResize(b.size());
-    s.setZero();
-    direction.conservativeResize(b.size());
-    direction.setZero();
-    tmp.conservativeResize(b.size());
-    tmp.setZero();
-
-    ArrayN Ma = M.array();
+    ArrayX Ma = M.array();
     direction = (residual.array() / Ma).matrix();
     residual = direction;
 
-    s = A * residual;
-
+    // s = A * residual;
+    parallelMatVec(A, residual, s);
     Ap = s;
 
     double deltaNew = residual.dot(s);
-
     double bNorm = b.norm();
 
     bool converged = false;
@@ -1111,56 +1186,88 @@ bool World::solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const Vec
         q = (Ap.array() / Ma).matrix();
 
         double alpha = Ap.dot(q);
-        if(fabs(alpha) > 0.0) {
+        if(fabs(alpha) > 1e-9) {
             alpha = deltaNew / alpha;
         }
 
         x += alpha * direction;
-
         residual -= alpha * q;
-
-        s = A * residual;
-
+        // s = A * residual;
+        parallelMatVec(A, residual, s);
         double deltaOld = deltaNew;
 
         deltaNew = residual.dot(s);
-
-        double beta = deltaNew / deltaOld;
-
+        double beta = 0;
+        if(deltaOld > 1e-9) {
+            beta = deltaNew / deltaOld;
+        }
         direction *= beta;
         direction += residual;
-
         Ap *= beta;
         Ap += s;
 
-        if(i > 0 && i % 5 == 0) {
-            tmp = A * x;
+        // if(i > 0 && i % 5 == 0) {
+            // tmp = A * x;
+            parallelMatVec(A, x, tmp);
             tmp -= b;
             double tmpNorm = tmp.norm();
             if(tmpNorm < eps * bNorm) {
                 converged = true;
                 break;
             }
-        }
+        // }
     }
     return converged;
 }
 
+void World::parallelMatVec(const SparseMat& A, const VectorX& b, VectorX& x) {
+    x.conservativeResize(A.rows());
+    x.setZero();
+    #pragma omp parallel for schedule(static)
+    for (int k = 0; k < A.rows(); ++k) {
+        for (SparseMat::InnerIterator it(A, k); it; ++it) {
+            x[k] += it.value() * b[it.col()];
+        }
+    }
+}
+
 void World::finalizeSolution() {
     //Copy new velocity to grid
+    {
+    auto timer = prof.timeName("\tVelocity Copy");
+    #pragma omp parallel for
     for(int i = 0; i < totalCells; i++) {
         int idx = gridToSolution[i];
         if(idx >= 0) {
-            velocity[idx] = vStar.segment<DIM>(idx * DIM);
+            velocity[i] = vStar.segment<DIM>(idx * DIM);
         }
     }
+    }
+    // for(int i = 0; i < (int)velocity.size(); i++) {
+    //     printf("(%f, %f)\n", velocity[i](0), velocity[i](1));
+    // }
     //extend velocity field
+    {
+    auto timer = prof.timeName("\tDisplacement Advection");
+    double max_alpha = 0;
+    #pragma omp parallel for reduction(max : max_alpha)
     for (int i = 0; i < totalCells; i++) {
         u[i] += velocity[i] * dt;
+        double alpha = dt * std::max(std::abs(velocity[i](0))/h, std::abs(velocity[i](1))/h);
+        if(alpha > max_alpha) {
+            max_alpha = alpha;
+        }
+    }
+    if(max_alpha >= 1.0) {
+        printf("\nCFL Violated with alpha of %f\n", max_alpha);
+        std::exit(0);
     }
     advectField(u, vecWorkspace);
+    }
     //update solid displacements
     // Adjust boundary displacement
+    {
+    auto timer = prof.timeName("\tBoundary Material");
     for(int i = xmin; i < xmax; i++) {
         u[i*res[1]+ymin] = 2 * u[i*res[1]+(ymin+1)] - u[i*res[1]+(ymin+2)];
         u[i*res[1]+(ymax-1)] = 2 * u[i*res[1]+(ymax-2)] - u[i*res[1]+(ymax-3)];
@@ -1169,8 +1276,10 @@ void World::finalizeSolution() {
         u[xmin*res[1]+j] = 2 * u[(xmin+1)*res[1]+j] - u[(xmin+2)*res[1]+j];
         u[(xmax-1)*res[1]+j] = 2 * u[(xmax-2)*res[1]+j] - u[(xmax-3)*res[1]+j];
     }
-
+    }
     // Recover material position field
+    {
+    auto timer = prof.timeName("\tMaterial Recovery");
     int index = 0;
     for(int x = 0; x < res[0]; x++) {
         for(int y = 0; y < res[1]; y++, index++) {
@@ -1180,15 +1289,27 @@ void World::finalizeSolution() {
         }
     }
     vecWorkspace = velocity;
+    }
     //compute solid masses
+    {
+    auto timer = prof.timeName("\tCompute Solid Mass");
     computeSolidMass(true);
+    }
     //advect surface mesh
 
     //compute SDF
+    {
+    auto timer = prof.timeName("\tCompute SDF");
     computeSDF();
+    }
     //gather solid masses
+    {
+    auto timer = prof.timeName("\tGather Solid Masses");
     gatherSolidMasses();
+    }
     //boundary conditions
+    {
+    auto timer = prof.timeName("\tBoundary Velocity");
     for(int x = 0; x < res[0]; x++) {
         velocity[x*res[1]+0].setZero();
         velocity[x*res[1]+(res[1]-1)].setZero();
@@ -1196,6 +1317,7 @@ void World::finalizeSolution() {
     for(int y = 0; y < res[1]; y++) {
         velocity[0*res[1]+y].setZero();
         velocity[(res[0]-1)*res[1]+y].setZero();
+    }
     }
 }
 
@@ -1262,6 +1384,7 @@ void World::computeSDF() {
 }
 
 void World::advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace) {
+    #pragma omp parallel for collapse(2)
     for(int x = 0; x < res[0]; x++) {
         for (int y = 0; y < res[1]; y++) {
             int index = x * res[1] + y;
@@ -1285,6 +1408,9 @@ void World::computeSolidMass(bool usesdf) {
     int halfMassSampleRes = massSampleRes >> 1;
     double fraction = 1.0 / (massSampleRes * massSampleRes);
 
+    {
+    auto timer = prof.timeName("\t\tCSM Loop 1");
+    #pragma omp parallel for schedule(static) collapse(2)
     for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
         for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
             int index = x * res[1] + y;
@@ -1296,7 +1422,11 @@ void World::computeSolidMass(bool usesdf) {
             detFInv[index] = std::abs(1.0 / computeF(coord, G, F));
         }
     }
+    }
 
+    {
+    auto timer = prof.timeName("\t\tCSM Loop 2");
+    #pragma omp parallel for schedule(static) collapse(2)
     for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
         for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
             int index = x * res[1] + y;
@@ -1338,8 +1468,12 @@ void World::computeSolidMass(bool usesdf) {
             }
         }
     }
+    }
 
+    {
+    auto timer = prof.timeName("\t\tCSM Loop 3");
     for(int i = 0; i < QUAD; i++) {
+        #pragma omp parallel for schedule(static) collapse(2)
         for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
             for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
                 int index = x * res[1] + y;
@@ -1349,6 +1483,7 @@ void World::computeSolidMass(bool usesdf) {
                 mass[index+offsets[i]] += quarterVolumeFractions[index*QUAD+i] * detFInv[index] * quarterCellSolidMass;
             }
         }
+    }
     }
 }
 
@@ -1367,7 +1502,8 @@ void World::gatherSolidMasses() {
     //     nodeSolidVolumeFraction[i] *= 0.125;
     // }
 
-    gridToSolid.resize(totalCells, -1);
+    // gridToSolid.resize(totalCells, -1);
+    gridToSolid = std::vector<int>(totalCells, -1);
     int idx = 0;
     for(int x = 1; x < res[0] - 1; x++) {
         for (int y = 1; y < res[1] - 1; y++) {
@@ -1763,17 +1899,4 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
         }
 	}
 	return true;
-}
-
-World::~World() {
-    //Causes a segfault
-    /// delete [] mass;
-    /// delete [] vel;
-    /// delete [] tau;
-    /// delete [] mat;
-    /// delete [] dXx;
-    /// delete [] dXy;
-    /// delete [] stress;
-    /// delete [] F;
-    prof.dump<std::chrono::duration<double>>(std::cout);
 }

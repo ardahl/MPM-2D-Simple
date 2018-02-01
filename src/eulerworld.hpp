@@ -82,12 +82,8 @@ public:
     double subsampleDh;
     double quarterCellSolidMass;
     VectorX vStar;                           //updated velocity from forces solve
-    VectorX mv;
     VectorX solidMv;
-    VectorX unitForce;
     VectorX solidUnitForce;
-    VectorX nzMassVec;
-    VectorX nzMassVecInv;
     VectorX dampedMass;
     std::vector<int> gridToSolution;
     std::vector<int> gridToSolid;
@@ -109,6 +105,9 @@ public:
     SparseMat systemMat;
     VectorX systemMatDiag;
 
+    //PCR
+    VectorX q, s, Ap, tmp, residual, direction;
+
     //Color for Rendering
     std::vector<Eigen::Vector3d> color;
 
@@ -125,6 +124,7 @@ public:
     #endif
     int inc;
 
+    int testVel;
     World(std::string config);
     ~World();
     //Functions
@@ -143,6 +143,7 @@ public:
     MatrixN firstPKDifferential(const MatrixN& dF);
     void computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxhat);
     bool solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M);
+    void parallelMatVec(const SparseMat& A, const VectorX& b, VectorX& x);
     void computeSDF();
     void advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace);
     void computeSolidMass(bool usesdf=false);
