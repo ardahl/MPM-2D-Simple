@@ -20,21 +20,21 @@ public:
 class Particle {
 public:
     //Temp
-    Eigen::Matrix2d B;         //B matrix from APIC paper
-    
-    Eigen::Vector2d u;        //Initial position (rest state)
-    Eigen::Vector2d x, v;      //postition, velocity
+    MatrixN B;         //B matrix from APIC paper
+
+    VectorN u;        //Initial position (rest state)
+    VectorN x, v;      //postition, velocity
     Eigen::Vector3d color;
     Eigen::Vector3d c1, c2;
-    Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
-    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient 
-    Eigen::Vector2d f;
+    MatrixN gradientE; //elastic portion of deformation gradient
+    MatrixN gradientP; //plastic portion of deformation gradient
+    VectorN f;
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
-    
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m): 
-	  B(Eigen::Matrix2d::Zero()), u(x), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), f(Eigen::Vector2d::Zero()), m(m), rho(0.0), vol(0.0) {}
+
+    Particle(VectorN x, VectorN v, Eigen::Vector3d color, double m):
+	  B(MatrixN::Zero()), u(x), x(x), v(v), color(color), gradientE(MatrixN::Identity()), gradientP(MatrixN::Identity()), f(VectorN::Zero()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
@@ -51,38 +51,45 @@ struct Object {
   std::string type;
   double size[2];
   int ores[2];
-  Eigen::Vector2d object, center;
+  VectorN object, center;
   std::vector<Particle> particles;      //B*Dinv is an approximation of gradV, so maybe store it for later
   std::vector<Spring> springs;
 };
-  
+
 
 class World {
 public:
-    int stepNum;
+    int stepNum, steps;
     double elapsedTime, dt, totalTime;
     std::string filename;
-    Eigen::Vector2d origin;                 //lower left position
+    VectorN origin;                 //lower left position
     int res[2];                             //Grid dimensions
     double h;                               //Grid spacing
     //Structures used for calculations
-    double *mass;
+    std::vector<double> mass;
+    // double *mass;
     //No pressure projection, so no staggered grid needed
-    Eigen::Vector2d *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
-    Eigen::Vector2d *prevVel;
+    std::vector<VectorN> vel, prevVel, velStar, frc;
+    std::vector<VectorN> mat, matdiff;
+    std::vector<MatrixN> stress;
+    std::vector<double> weights;
+    MatrixX G;
+    int offsets[4];
+    // VectorN *vel, *velStar, *frc;   //previous velocity, new velocity, grid forces
+    // VectorN *prevVel;
     //Material coordinates
-    Eigen::Vector2d *mat;
-    Eigen::Matrix2d *stress;
-    double *weights;
-    
+    // VectorN *mat;
+    // MatrixN *stress;
+    // double *weights;
+
     // particle object
     std::vector<Object> objects;
 
     // external forces
-    Eigen::Vector2d gravity;
+    VectorN gravity;
     double rotation;
     bool rotationEnabled, gravityEnabled, plasticEnabled;
-    Eigen::Vector2d center;
+    VectorN center;
 
     World(std::string config);
     ~World();
@@ -97,17 +104,21 @@ public:
     void updateGradient();                  //Update_Deformation_Gradient
     void gridToParticles();                 //Update_Particle_Velocities and Update_Particle_Positions
 
+    MatrixN upwindJac(const std::vector<VectorN>& field, const std::vector<VectorN>& velocity, int i, int j, bool boundary=true);
+
     //Semi-lagrangian advection
     std::vector<char> valid;
     void velExtrapolate();
     void slAdvect();
     //Eulerian Advection
     void eAdvect();
+    void fastSweep(std::vector<double>& field, std::vector<char> valid, double h, int res[2], int iters, double eps);
+    void velExtrapolateFS(std::vector<VectorN>& vel, const std::vector<double>& field, std::vector<char> &valid, int res[2], int iters, double eps);
 
     //optimization stuff (not part of the actual algorithm)
     //Mostly for testing purposes right now
     #ifndef NDEBUG
-    Eigen::Vector2d **matTrans;
+    VectorN **matTrans;
     int count, sMax, inc;
     std::vector<char> val;
     #endif

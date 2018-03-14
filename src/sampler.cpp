@@ -1,3 +1,5 @@
+// ./bin/sampler <output filename>
+
 #include "world.hpp"
 #include <cstdio>
 #include <fstream>
@@ -21,7 +23,8 @@ using benlib::range;
 enum VelType {
     constant,
     linear,
-    rotation
+    rotation,
+    none
 };
 
 int main(int argc, char* argv[]) {
@@ -38,19 +41,19 @@ int main(int argc, char* argv[]) {
     int numPart = 648;              //number of random particles in object
     #endif
     VelType vt = rotation;          //How to initialize velocity
-    
+
     //Jitter
     bool jitter = false;            //Whether to jitter the particles
     Vector2d cellSize(0.025, 0.025);//Size of each grid cell
     double jitterFract = 0.25;      //How much of the cell size it should be jitter by at most
-    
+
     //Constant veloctiy
     double xvel = 1.0;              //x and y values for constant veloctiy
     double yvel = 0.0;
     //Linear veloctiy v=(x,y)
     //Rotational velocity v=(-y,x)
     bool centered = true;           //whether linear and rotational velocity uses the center for (0,0)
-    
+
     //Initialize B
     Matrix2d B, C;
     Matrix2d D = ((cellSize(0)*cellSize(1))/3.0)*Matrix2d::Identity();
@@ -68,7 +71,7 @@ int main(int argc, char* argv[]) {
     }
     C = scale*C;
     B = C * D;
-  
+
 #if SQUARE
     //Vector2d center = object + (Vector2d(size[0],size[1]) * 0.5);
     Vector2d center = object;
@@ -87,7 +90,7 @@ int main(int argc, char* argv[]) {
     else {
         diffy = 2*size[1] / (ores[1]-1);
     }
-    
+
     for(int i = 0; i < ores[0]; i++) {
         for(int j = 0; j < ores[1]; j++) {
             Vector2d pos = object + Vector2d(diffx*i, diffy*j);
@@ -135,7 +138,7 @@ int main(int argc, char* argv[]) {
         //technically this is an ellipse because I'm using the same data as the
         //square and just using the size vector as radius of the semi-major and semi-minor axes
         //just make a square and reject those outside the ellipse.
-        //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles 
+        //~78.5% of the resx*resy particles are accepted - Pi/4 * (l*w) particles
     double diffx, diffy;
     if(ores[0] < 2) {
         diffx = size[0];
@@ -149,7 +152,7 @@ int main(int argc, char* argv[]) {
     else {
         diffy = 2*size[1] / (ores[1]-1);
     }
-    
+
     #if RAND
     while(parts.size() < numPart) {
         Vector2d pos = Matrix<double, 2, 1>::Random();
@@ -174,7 +177,10 @@ int main(int argc, char* argv[]) {
         Vector2d ph = pos - object;
         if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
             Vector2d vel;
-            if(vt == constant) {
+            if(vt == none) {
+                vel = Vector2d::Zero();
+            }
+            else if(vt == constant) {
                 vel = Vector2d(xvel, yvel);
             }
             else if(vt == linear) {
@@ -216,7 +222,7 @@ int main(int argc, char* argv[]) {
     else {
         diffy = 2*size[1] / (ores[1]-1);
     }
-    
+
     for(int i = 0; i < ores[0]; i++) {
         Vector2d pos = center - Vector2d(size[0], 0) + Vector2d(diffx*i, 0);
         Vector3d col(1.0, 0.0, 0.0);
@@ -253,7 +259,6 @@ int main(int argc, char* argv[]) {
         Particle par(object, vel, col, pmass);
         parts.push_back(par);
     }
-  
     if(jitter) {
         Particle par(center, scale*Vector2d(0,0), Vector3d(1,1,0), pmass);
         par.B = B;

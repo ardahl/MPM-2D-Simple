@@ -12,7 +12,12 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+// Regular MPM or testing material transfer
 #define MAT_TRANSFER
+// Splotting material differences or material coordiantes
+#define DIFF
+// Velocity extrapolation by fast sweeping or simple average
+#define FASTSWEEP
 
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later

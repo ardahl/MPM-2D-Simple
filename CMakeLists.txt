@@ -18,6 +18,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-int-in-bool-contex
 
 message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
+#  Option for if it is building on a cluster or not
+# only used to change where the output is stored
+option(Cluster "Cluster" OFF)
+if (Cluster)
+    add_definitions(-DCLUSTER)
+    message(STATUS "Building for cluster")
+endif()
+
 #Source directory
 set( SRC "src")
 #mpm graphics

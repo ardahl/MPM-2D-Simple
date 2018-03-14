@@ -6,6 +6,9 @@
 #include <iomanip>
 #include <Partio.h>
 #include <Eigen/Geometry>
+#include <random>
+#include <unordered_map>
+#include <utility>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -295,8 +298,6 @@ World::World(std::string config) {
         Vector2d avePos = Vector2d::Zero();
         for(size_t j = 0; j < objects[i].particles.size(); j++) {
             avePos += objects[i].particles[j].x;
-            objects[i].particles[j].c1 = objects[i].particles[j].color;
-            objects[i].particles[j].c2 = Vector3d(0.0, 0.0, 1.0);
         }
         avePos /= objects[i].particles.size();
         objects[i].center = avePos;
@@ -330,7 +331,8 @@ World::World(std::string config) {
 
     totalActiveCells = (res[0]-2) * (res[1]-2);
     totalCells = res[0] * res[1];
-    subsampleDh = h / 10.0;
+    // subsampleDh = h / 10.0;
+    subsampleDh = 0.00125;
     quarterCellSolidMass = 1;
     offsets[0] = 0;
     offsets[1] = 1;
@@ -382,7 +384,7 @@ World::World(std::string config) {
 
     inc = steps;
     #ifndef NDEBUG
-    inc = 50000;
+    inc = 10000;
     // inc = 1;
     count = 0;
     sMax = 31;
@@ -391,6 +393,7 @@ World::World(std::string config) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
     }
     #endif
+    initializing = true;
 }
 
 World::~World() {
@@ -537,17 +540,19 @@ void World::init() {
             X[index] = pos;
             // color[index] = Vector3d(135,206,255);
             ///Rotation
+            // double scale = 1.5;
+            double scale = 5;
             if(testVel == 0) {
                 if(i == 0 && j == 0) {
                     printf("Vel: Rotation\n");
                 }
-                velocity[index] = 1.5*Vector2d(-ph(1), ph(0));
+                velocity[index] = scale*Vector2d(-ph(1), ph(0));
             }
             else if(testVel == 1) { ///Linear
                 if(i == 0 && j == 0) {
                     printf("Vel: Linear\n");
                 }
-                velocity[index] = 1.5*VectorN(1, 0);
+                velocity[index] = scale*VectorN(1, 0);
             }
             else { ///None
                 if(i == 0 && j == 0) {
@@ -609,6 +614,34 @@ void World::init() {
             gridToSolution[index] = idx++;
         }
     }
+
+    //Init material particles
+    std::random_device rd;  //Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+    std::uniform_real_distribution<> dis(0, std::nextafter(h, std::numeric_limits<double>::max()));
+    int particlesPerCell = 32;
+    double density = quarterCellSolidMass / (h * h * 0.25);
+    double volume = (h * h) / particlesPerCell;
+
+    for(int i = tightMin[0]; i < tightMax[0]; i++) {
+        for(int j = tightMin[1]; j < tightMax[1]; j++) {
+            int ind = i*res[1] + j;
+            if(!valid[ind]) {
+                continue;
+            }
+            VectorN grid = origin + h*VectorN(i, j);
+            for(int k = 0; k < particlesPerCell; k++) {
+                VectorN jitter = grid + VectorN(dis(gen), dis(gen));
+                // double d = interpolate_value(jitter, restMass, origin, res, h);
+                double d = density * volume;
+                VectorN v = interpolate_value(jitter, velocity, origin, res, h);
+                Particle p(jitter, v, color[ind], d);
+                matParticles.push_back(p);
+            }
+        }
+    }
+    vecWorkspace = velocity;
+    initializing = false;
 }
 
 
@@ -625,7 +658,11 @@ void World::step() {
         }
         count++;
         #endif
+        #ifdef CLUSTER
+        std::ofstream colout("/nfs/scratch/adahl1/euler/col0");
+        #else
         std::ofstream colout("./euler/col0");
+        #endif
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
                 VectorN coord = X[i*res[1]+j];
@@ -635,7 +672,11 @@ void World::step() {
             }
         }
         colout.close();
+        #ifdef CLUSTER
+        std::ofstream vout("/nfs/scratch/adahl1/euler/vel0");
+        #else
         std::ofstream vout("./euler/vel0");
+        #endif
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 Vector2d p = origin+h*Vector2d(i,j);
@@ -737,7 +778,11 @@ void World::step() {
 	elapsedTime += dt;
 
     if(stepNum % inc == 0) {
+        #ifdef CLUSTER
+        std::ofstream colout("/nfs/scratch/adahl1/euler/col"+std::to_string(stepNum/inc));
+        #else
         std::ofstream colout("./euler/col"+std::to_string(stepNum/inc));
+        #endif
         for(int j = res[1]-1; j >= 0; j--) {
             for(int i = 0; i < res[0]; i++) {
                 VectorN coord = X[i*res[1]+j];
@@ -747,7 +792,11 @@ void World::step() {
             }
         }
         colout.close();
+        #ifdef CLUSTER
+        std::ofstream vout("/nfs/scratch/adahl1/euler/vel"+std::to_string(stepNum/inc));
+        #else
         std::ofstream vout("./euler/vel"+std::to_string(stepNum/inc));
+        #endif
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 Vector2d p = origin+h*Vector2d(i,j);
@@ -769,7 +818,11 @@ void World::step() {
         }
         count++;
         if(count == sMax) {
+            #ifdef CLUSTER
+            std::ofstream mats("/nfs/scratch/adahl1/euler/mats.txt");
+            #else
             std::ofstream mats("./euler/mats.txt");
+            #endif
             for(int i = 0; i < res[0]; i++) {
                 for(int j = 0; j < res[1]; j++) {
                     // if(valid[i*res[1]+j]) {
@@ -783,7 +836,7 @@ void World::step() {
             mats.close();
             std::cout << "\n\nTimes:\n";
             prof.dump<std::chrono::duration<double>>(std::cout);
-            std::cout << "Percentage:\n";
+            std::cout << "\n\nPercentage:\n";
             prof.dumpPercentages(std::cout);
             std::exit(0);
         }
@@ -1243,10 +1296,28 @@ void World::finalizeSolution() {
         }
     }
     }
-    // for(int i = 0; i < (int)velocity.size(); i++) {
-    //     printf("(%f, %f)\n", velocity[i](0), velocity[i](1));
-    // }
+    //grid to particles and particles to grid
+    {
+    auto timer = prof.timeName("\tParticles and Grid");
+    gridToParticles();
+    particlesToGrid();
+    }
     //extend velocity field
+    {
+    auto timer = prof.timeName("\tExtend Velocity Field");
+    std::vector<double> phifield(res[0]*res[1], res[0]+res[1]+2);
+    for(int x = 0; x < res[0]; x++) {
+        for(int y = 0; y < res[1]; y++) {
+            int ind = x*res[1]+y;
+            if(valid[ind]) {
+                phifield[ind] = -h/2.0;
+            }
+        }
+    }
+    distSweep(phifield, valid, 8, 1e-8);
+    velSweep(velocity, phifield, 8, 1e-8);
+    }
+    //advect displacement field
     {
     auto timer = prof.timeName("\tDisplacement Advection");
     double max_alpha = 0;
@@ -1356,7 +1427,7 @@ void World::computeSDF() {
     }
 
     //Number of cells to extend the boarder
-    int tightBorder = 3;
+    int tightBorder = 5;
     int extrap = 20;
 
     #if DIM == 3
@@ -1408,8 +1479,6 @@ void World::computeSolidMass(bool usesdf) {
     int halfMassSampleRes = massSampleRes >> 1;
     double fraction = 1.0 / (massSampleRes * massSampleRes);
 
-    {
-    auto timer = prof.timeName("\t\tCSM Loop 1");
     #pragma omp parallel for schedule(static) collapse(2)
     for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
         for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
@@ -1422,10 +1491,7 @@ void World::computeSolidMass(bool usesdf) {
             detFInv[index] = std::abs(1.0 / computeF(coord, G, F));
         }
     }
-    }
 
-    {
-    auto timer = prof.timeName("\t\tCSM Loop 2");
     #pragma omp parallel for schedule(static) collapse(2)
     for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
         for(int y = tightMin[1]; y < tightMax[1]-1; y++) {
@@ -1468,10 +1534,7 @@ void World::computeSolidMass(bool usesdf) {
             }
         }
     }
-    }
 
-    {
-    auto timer = prof.timeName("\t\tCSM Loop 3");
     for(int i = 0; i < QUAD; i++) {
         #pragma omp parallel for schedule(static) collapse(2)
         for(int x = tightMin[0]; x < tightMax[0]-1; x++) {
@@ -1484,25 +1547,9 @@ void World::computeSolidMass(bool usesdf) {
             }
         }
     }
-    }
 }
 
 void World::gatherSolidMasses() {
-    // nodeSolidVolumeFraction.clear();
-    //
-    // for (int i = 0; i < QUAD; i++) {
-    //     for (int x = 1; x < res[0] - 1; x++) {
-    //         for (int y = 1; y < res[1] - 1; y++) {
-    //             int index = x*res[1]+y;
-    //             nodeSolidVolumeFraction[index+offsets[i]] += quarterVolumeFractions[index*QUAD+i];
-    //         }
-    //     }
-    // }
-    // for(int i = 0; i < (int)nodeSolidVolumeFraction.size(); i++) {
-    //     nodeSolidVolumeFraction[i] *= 0.125;
-    // }
-
-    // gridToSolid.resize(totalCells, -1);
     gridToSolid = std::vector<int>(totalCells, -1);
     int idx = 0;
     for(int x = 1; x < res[0] - 1; x++) {
@@ -1517,6 +1564,172 @@ void World::gatherSolidMasses() {
         }
     }
     totalSolidCells = idx;
+}
+
+void World::gridToParticles() {
+    VectorN wallNormals[4] = {VectorN(1, 0), VectorN(0, 1),
+                              VectorN(-1, 0), VectorN(0, -1)};
+    double boundaries[4] = {origin(0),
+                            origin(1),
+                            origin(0) + h * (res[0] - 1),
+                            origin(1) + h * (res[1] - 1)};
+    double alpha = 0.99;
+    #pragma omp parallel for schedule(static)
+    for(int c = 0; c < (int)matParticles.size(); c++) {
+        Particle& p = matParticles[c];
+        double x = (p.x(0) - origin(0)) / h;
+        double y = (p.x(1) - origin(1)) / h;
+        int i = std::floor(x) - 1;
+        int j = std::floor(y) - 1;
+        VectorN pic(0, 0);
+        VectorN flip(0, 0);
+        double weights = 0;
+
+        for(int r = i; r < i+4; r++) {
+            for(int t = j; t < j+4; t++) {
+                if(r < 0 || t < 0 || r > res[0]-1 || t > res[1]-1) {
+                    continue;
+                }
+                int ind = r*res[1]+t;
+                if(mass[ind] == 0) {
+                    continue;
+                }
+
+                VectorN diff = (1.0/h) * (p.x - origin);
+                diff -= VectorN(r, t);
+                VectorN n = VectorN::Zero();
+                for(int a = 0; a < DIM; a++) {
+                    if(std::abs(diff(a)) < 1) {
+                        n(a) = 0.5 * std::abs(std::pow(diff(a), 3)) - diff(a)*diff(a) + 2.0/3.0;
+                    }
+                    else if(std::abs(diff(a)) < 2) {
+                        n(a) = -1.0/6.0 * std::abs(std::pow(diff(a), 3)) + diff(a)*diff(a) - 2*std::abs(diff(a)) + 4.0/3.0;
+                    }
+                }
+                double w = n(0) * n(1);
+                weights += w;
+                pic += velocity[ind] * w;
+                flip += (velocity[ind] - vecWorkspace[ind]) * w;
+            }
+        }
+
+        flip += p.v;
+        p.v = (1 - alpha) * pic + alpha * flip;
+    }
+    double wallThickness = 0.015;
+    double springConstant = 10000;
+    double friction = 0.5;
+    #pragma omp parallel for schedule(dynamic)
+    for(int c = 0; c < (int)matParticles.size(); c++) {
+        Particle& p = matParticles[c];
+        VectorN futurePos = p.x;
+        double fx = (futurePos(0) - origin(0)) / h;
+        double fy = (futurePos(1) - origin(1)) / h;
+        int i = std::floor(fx);
+        int j = std::floor(fy);
+        i = std::min(std::max(i, 0), res[0] - 2);
+        j = std::min(std::max(j, 0), res[1] - 2);
+        // handle collision with walls
+        for(int b = 0; b < 4; b++) {
+            double dist = std::abs(p.x(b % 2) - boundaries[b]);
+            if(dist < wallThickness) {
+                double overlap = wallThickness - dist;
+                int xIndex = i;
+                if(b == 0) {
+                    xIndex = 0;
+                }
+                else if(b == 2) {
+                    xIndex = res[0] - 1;
+                }
+                int yIndex = j;
+                if(b == 1) {
+                    yIndex = 0;
+                }
+                else if(b == 3) {
+                    yIndex = res[1] - 1;
+                }
+                VectorN v_other = velocity[xIndex*res[1]+yIndex];
+                VectorN vrel = p.v - v_other;
+                double vn = vrel.dot(wallNormals[b]);
+                if(vn <= 0) {
+                    double impulse = -std::min(dt*springConstant*overlap, p.m*(0.1*overlap/dt-vn));
+                    double delta_vn = -impulse / p.m;
+                    VectorN vt = vrel - vn * wallNormals[b];
+                    VectorN new_vt = std::max(0.1-friction*delta_vn/vt.norm(), 0.0) * vt;
+                    p.v = (vn + delta_vn) * wallNormals[b] + new_vt + v_other;
+                    break;
+                }
+            }
+        }
+        p.x += p.v * dt;
+    }
+}
+
+void World::particlesToGrid() {
+    std::unordered_map<int, std::pair<VectorN, double> > indexToWeight;
+    #pragma omp parallel
+    {
+    std::unordered_map<int, std::pair<VectorN, double> > localMap;
+    #pragma omp parallel for schedule(static)
+    for(int c = 0; c < (int)matParticles.size(); c++) {
+        Particle& p = matParticles[c];
+        double x = (p.x(0) - origin(0)) / h;
+        double y = (p.x(1) - origin(1)) / h;
+        int i = std::floor(x) - 1;
+        int j = std::floor(y) - 1;
+
+        for(int s = i; s < i+4; s++) {
+            for(int t = j; t < j+4; t++) {
+                if(s < 0 || t < 0 || s > res[0]-1 || t > res[1]-1) {
+                    continue;
+                }
+                VectorN diff = (1.0/h) * (p.x - origin);
+                diff -= VectorN(s, t);
+                VectorN n(0, 0);
+                for(int k = 0; k < 2; k++) {
+                    if(std::abs(diff[k]) < 1) {
+                        n[k] = 0.5*std::abs(std::pow(diff[k], 3)) - diff[k]*diff[k] + 2.0/3.0;
+                    }
+                    else if(std::abs(diff[k]) < 2) {
+                        n[k] = -1.0/6.0*std::abs(std::pow(diff[k], 3)) + diff[k]*diff[k] - 2*std::abs(diff[k]) + 4.0/3.0;
+                    }
+                }
+                double w = n[0] * n[1];
+                int index = s*res[1]+t;
+                if(localMap.find(index) == localMap.end()) {
+                    localMap[index].first = w * p.v;
+                    localMap[index].second = w;
+                }
+                else {
+                    localMap[index].first += w * p.v;
+                    localMap[index].second += w;
+                }
+            }
+        }
+    }
+    #pragma omp barrier
+    #pragma omp critical
+    {
+        for(auto iToW : localMap) {
+            if(indexToWeight.find(iToW.first) == indexToWeight.end()) {
+                indexToWeight[iToW.first] = iToW.second;
+            }
+            else {
+                indexToWeight[iToW.first].first += iToW.second.first;
+                indexToWeight[iToW.first].second += iToW.second.second;
+            }
+        }
+    }
+    }
+    mass.clear();
+    static int cutoff = 3;
+    for(auto iToW : indexToWeight) {
+        if(iToW.second.second < cutoff) {
+            continue;
+        }
+        velocity[iToW.first] = iToW.second.first / iToW.second.second;
+        mass[iToW.first] = 1;
+    }
 }
 
 /************************
@@ -1624,7 +1837,7 @@ void World::distSweep(std::vector<double>& field, const std::vector<char>& initi
     }
 }
 
-void World::velSweep(Vector2d *vel, double *field, int iters, double eps) {
+void World::velSweep(std::vector<VectorN>& vel, const std::vector<double>& field, int iters, double eps) {
     double err = 100;
     int it = 0;
     std::vector<char> newvalid = valid;
@@ -1747,32 +1960,23 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	Partio::ParticleAttribute xattr;
 	Partio::ParticleAttribute uattr;
 	Partio::ParticleAttribute battr;
-	Partio::ParticleAttribute geattr;
-	Partio::ParticleAttribute gpattr;
 	Partio::ParticleAttribute cattr;
 	Partio::ParticleAttribute mattr;
 	Partio::ParticleAttribute rattr;
 	Partio::ParticleAttribute vattr;
-    Partio::ParticleAttribute xoattr;
     data->addParticles(particles.size());
 
-    data->addAttribute("rest", Partio::VECTOR, 2);
 	data->addAttribute("position", Partio::VECTOR, 3);
 	data->addAttribute("velocity", Partio::VECTOR, 2);
 	data->addAttribute("B", Partio::VECTOR, 4);
-	data->addAttribute("gradientE", Partio::VECTOR, 4);
-	data->addAttribute("gradientP", Partio::VECTOR, 4);
 	data->addAttribute("color", Partio::VECTOR, 3);
 	data->addAttribute("mass", Partio::FLOAT, 1);
 	data->addAttribute("rho", Partio::FLOAT, 1);
 	data->addAttribute("vol", Partio::FLOAT, 1);
 
-    data->attributeInfo("rest", xoattr);
 	data->attributeInfo("position", xattr);
 	data->attributeInfo("velocity", uattr);
 	data->attributeInfo("B", battr);
-	data->attributeInfo("gradientE", geattr);
-	data->attributeInfo("gradientP", gpattr);
 	data->attributeInfo("color", cattr);
 	data->attributeInfo("mass", mattr);
 	data->attributeInfo("rho", rattr);
@@ -1780,23 +1984,17 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 
 	for (unsigned int i=0; i < particles.size(); i++) {
 		const Particle &p = particles[i];
-        float *x0 = data->dataWrite<float>(xoattr, i);
 		float *x = data->dataWrite<float>(xattr, i);
 		float *u = data->dataWrite<float>(uattr, i);
 		float *b = data->dataWrite<float>(battr, i);
-		float *ge = data->dataWrite<float>(geattr, i);
-		float *gp = data->dataWrite<float>(gpattr, i);
 		float *c = data->dataWrite<float>(cattr, i);
 		float *m = data->dataWrite<float>(mattr, i);
 		float *r = data->dataWrite<float>(rattr, i);
 		float *v = data->dataWrite<float>(vattr, i);
 
-        x0[0] = p.u(0), x0[1] = p.u(1);
 		x[0] = p.x(0), x[1] = p.x(1), x[2] = 0;
         u[0] = p.v(0), u[1] = p.v(1);
 		b[0] = p.B(0,0), b[1] = p.B(0,1), b[2] = p.B(1,0), b[3] = p.B(1,1);
-		ge[0] = p.gradientE(0,0), ge[1] = p.gradientE(0,1), ge[2] = p.gradientE(1,0), ge[3] = p.gradientE(1,1);
-		gp[0] = p.gradientP(0,0), gp[1] = p.gradientP(0,1), gp[2] = p.gradientP(1,0), gp[3] = p.gradientP(1,1);
 		c[0] = p.color(0), c[1] = p.color(1), c[2] = p.color(2);
 		m[0] = p.m;
 		r[0] = p.rho;
@@ -1811,23 +2009,17 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	Partio::ParticlesDataMutable *data = Partio::read(fname);
 	if (data == 0) return 0;
-    Partio::ParticleAttribute xoattr;
 	Partio::ParticleAttribute xattr;
 	Partio::ParticleAttribute uattr;
 	Partio::ParticleAttribute battr;
-	Partio::ParticleAttribute geattr;
-	Partio::ParticleAttribute gpattr;
 	Partio::ParticleAttribute cattr;
 	Partio::ParticleAttribute mattr;
 	Partio::ParticleAttribute rattr;
 	Partio::ParticleAttribute vattr;
 
-    bool rest = data->attributeInfo("rest", xoattr);
 	bool position = data->attributeInfo("position", xattr);
 	bool velocity = data->attributeInfo("velocity", uattr);
 	bool B = data->attributeInfo("B", battr);
-	bool gradientE = data->attributeInfo("gradientE", geattr);
-	bool gradientP = data->attributeInfo("gradientP", gpattr);
 	bool color = data->attributeInfo("color", cattr);
 	bool mass = data->attributeInfo("mass", mattr);
 	bool rho = data->attributeInfo("rho", rattr);
@@ -1843,12 +2035,6 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
         } else {
             p.x = Vector2d(0.0, 0.0);
         }
-        if(rest) {
-            float *x0 = data->dataWrite<float>(xoattr, i);
-            p.u(0) = x0[0], p.u(1) = x0[1];
-        } else {
-            p.u = p.x;
-        }
         if (velocity) {
             float *u = data->dataWrite<float>(uattr, i);
             p.v(0) = u[0], p.v(1) = u[1];
@@ -1860,18 +2046,6 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
             p.B(0,0) = b[0], p.B(0,1) = b[1], p.B(1,0) = b[2], p.B(1,1) = b[3];
         } else {
             p.B = Matrix2d::Zero();
-        }
-        if (gradientE) {
-            float *g = data->dataWrite<float>(geattr, i);
-            p.gradientE(0,0) = g[0], p.gradientE(0,1) = g[1], p.gradientE(1,0) = g[2], p.gradientE(1,1) = g[3];
-        } else {
-            p.gradientE = Matrix2d::Identity();
-        }
-        if (gradientP) {
-            float *g = data->dataWrite<float>(gpattr, i);
-            p.gradientP(0,0) = g[0], p.gradientP(0,1) = g[1], p.gradientP(1,0) = g[2], p.gradientP(1,1) = g[3];
-        } else {
-            p.gradientP = Matrix2d::Identity();
         }
         if (color) {
             float *c = data->dataWrite<float>(cattr, i);

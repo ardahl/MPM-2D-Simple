@@ -111,13 +111,13 @@ inline void fastSweep(double *field, std::vector<char> valid, double h, int res[
             }
         }
 
-        printf("\nSweep %d\n", it+1);
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                printf("%09.5f ", field[i*res[1]+j]);
-            }
-            printf("\n");
-        }
+        // printf("\nSweep %d\n", it+1);
+        // for(int j = res[1]-1; j >= 0; j--) {
+        //     for(int i = 0; i < res[0]; i++) {
+        //         printf("%09.5f ", field[i*res[1]+j]);
+        //     }
+        //     printf("\n");
+        // }
         it++;
     }
 }
@@ -221,13 +221,13 @@ inline void fastSweep(Vector2d *field, std::vector<char> valid, double h, int re
                 }
             }
 
-            printf("\nSweep %d, Dim %d\n", it+1, dim);
-            for(int j = res[1]-1; j >= 0; j--) {
-                for(int i = 0; i < res[0]; i++) {
-                    printf("(%09.5f,%09.5f) ", field[i*res[1]+j](0), field[i*res[1]+j](1));
-                }
-                printf("\n");
-            }
+            // printf("\nSweep %d, Dim %d\n", it+1, dim);
+            // for(int j = res[1]-1; j >= 0; j--) {
+            //     for(int i = 0; i < res[0]; i++) {
+            //         printf("(%09.5f,%09.5f) ", field[i*res[1]+j](0), field[i*res[1]+j](1));
+            //     }
+            //     printf("\n");
+            // }
             it++;
         }
     }
@@ -415,13 +415,13 @@ inline void velExtrapolateFS(Vector2d *vel, double *field, std::vector<char> val
                 vel[index] = vtmp;
             }
         }
-        printf("\nSweep %d\n", it+1);
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                printf("(%09.5f,%09.5f) ", vel[i*res[1]+j](0), vel[i*res[1]+j](1));
-            }
-            printf("\n");
-        }
+        // printf("\nSweep %d\n", it+1);
+        // for(int j = res[1]-1; j >= 0; j--) {
+        //     for(int i = 0; i < res[0]; i++) {
+        //         printf("(%09.5f,%09.5f) ", vel[i*res[1]+j](0), vel[i*res[1]+j](1));
+        //     }
+        //     printf("\n");
+        // }
         it++;
     }
 }
@@ -504,13 +504,13 @@ inline void velExtrapolateAve(Vector2d* vel, std::vector<char> valid, int res[2]
             }
         }
 
-        printf("\nSweep %d\n", it+1);
-        for(int j = res[1]-1; j >= 0; j--) {
-            for(int i = 0; i < res[0]; i++) {
-                printf("(%09.5f,%09.5f) ", vel[i*res[1]+j](0), vel[i*res[1]+j](1));
-            }
-            printf("\n");
-        }
+        // printf("\nSweep %d\n", it+1);
+        // for(int j = res[1]-1; j >= 0; j--) {
+        //     for(int i = 0; i < res[0]; i++) {
+        //         printf("(%09.5f,%09.5f) ", vel[i*res[1]+j](0), vel[i*res[1]+j](1));
+        //     }
+        //     printf("\n");
+        // }
         it++;
     }
 }
@@ -876,137 +876,139 @@ int main(int argc, char** argv) {
 			distExact[index] = d;
 			material[index] = rotate+center;
 			if(d < 0.0) {
-				/// field[index] = rotate;
-				field[index] = p;
-				distField[index] = d;
+                Vector2d np = rotate+center;
+				field[index] = np - p;
+				// field[index] = p;
+				// distField[index] = d;
+                distField[index] = -h/2.0;
 				valid[index] = 1;
 			}
 		}
 	}
 
-	std::vector<char> validcpy = valid;
-	matExtrapolateFM(material, distExact, valid, h, res);
-	/// Rotation2D<double> rot(-0.785398);
-	/// matExtrapolateFS(material, distExact, rot.toRotationMatrix(), valid, h, res, 20, 1e-8);
-	std::ofstream matout("material");
-	printf("Material Field:\n");
-	double err = 0;
-    double maxd = 0;
-    Vector2d md1, md2;
-    int mi, mj, mi2, mj2;
-	for(int j = res[1]-1; j >= 0; j--) {
-		for(int i = 0; i < res[0]; i++) {
-			int ind = i*res[1]+j;
-			Matrix2d dx = upwindJac(material, velExact, i, j, valid, h, res);
-			DX[ind] = dx;
-			Vector2d p = origin + h*Vector2d(i, j);
-			Vector2d ph = p-center;
-			Rotation2D<double> rot(-0.785398);
-			Vector2d rotate = rot * ph;
-			p = rotate+center;
-			Vector2d m = material[ind];
-			if(validcpy[ind]) {
-				printf("\033[0;31m(% 04.1f,% 04.1f)\033[0m ", m(0), m(1));
-			}
-			else {
-				printf("(% 04.1f,% 04.1f) ", m(0), m(1));
-			}
-			matout << p(0) << " " << p(1) << " " << "0\n";
-			matout << m(0) << " " << m(1) << " " << "1\n\n\n";
-			double diff = (p-m).norm();
-			if(diff > err) {
-				err = diff;
-			}
-            if(i != res[0]-1) {
-                Vector2d mtmp = material[(i+1)*res[1]+j];
-                diff = (m-mtmp).norm();
-                if(diff > maxd) {
-                    maxd = diff;
-                    mi = i;
-                    mj = j;
-                    mi2 = i+1;
-                    mj2 = j;
-                    md1 = m;
-                    md2 = mtmp;
-                }
-            }
-            if(i != 0) {
-                Vector2d mtmp = material[(i-1)*res[1]+j];
-                diff = (m-mtmp).norm();
-                if(diff > maxd) {
-                    maxd = diff;
-                    mi = i;
-                    mj = j;
-                    mi2 = i-1;
-                    mj2 = j;
-                    md1 = m;
-                    md2 = mtmp;
-                }
-            }
-            if(j != res[1]-1) {
-                Vector2d mtmp = material[i*res[1]+(j+1)];
-                diff = (m-mtmp).norm();
-                if(diff > maxd) {
-                    maxd = diff;
-                    mi = i;
-                    mj = j;
-                    mi2 = i;
-                    mj2 = j+1;
-                    md1 = m;
-                    md2 = mtmp;
-                }
-            }
-            if(j != 0) {
-                Vector2d mtmp = material[i*res[1]+(j-1)];
-                diff = (m-mtmp).norm();
-                if(diff > maxd) {
-                    maxd = diff;
-                    mi = i;
-                    mj = j;
-                    mi2 = i;
-                    mj2 = j-1;
-                    md1 = m;
-                    md2 = mtmp;
-                }
-            }
-		}
-		printf("\n");
-	}
-	printf("Max Error: %f\n", err);
-	matout.close();
-    printf("Max Dist: %f\n", maxd);
-    printf("%d, %d: (%f, %f)\n", mi, mj, md1(0), md1(1));
-    printf("%d, %d: (%f, %f)\n", mi2, mj2, md2(0), md2(1));
-
-	std::ofstream debug("fsmat");
-	debug << "\nDX: \n";
-	for(int j = res[1]-2; j >= 0; j--) {
-		for(int k = 0; k < 2; k++) {
-			for(int i = 0; i < res[0]-1; i++) {
-				int ind = i*res[0]+j;
-				debug << "[";
-				if(DX[ind](k,0) < 0) {
-					debug << std::fixed << std::setprecision(6) << DX[ind](k,0);
-				}
-				else {
-					debug << std::fixed << std::setprecision(6) << DX[ind](k,0);
-				}
-				debug << ",";
-				if(DX[ind](k,1) < 0) {
-					debug << std::fixed << std::setprecision(6) << DX[ind](k,1);
-				}
-				else {
-					debug << std::fixed << std::setprecision(6) << DX[ind](k,1);
-				}
-				debug << "] ";
-			}
-			debug << "\n";
-		}
-		debug << "\n";
-	}
-	debug << "\n";
-	debug.close();
-    std::exit(0);
+	// std::vector<char> validcpy = valid;
+	// matExtrapolateFM(material, distExact, valid, h, res);
+	// /// Rotation2D<double> rot(-0.785398);
+	// /// matExtrapolateFS(material, distExact, rot.toRotationMatrix(), valid, h, res, 20, 1e-8);
+	// std::ofstream matout("material");
+	// printf("Material Field:\n");
+	// double err = 0;
+    // double maxd = 0;
+    // Vector2d md1, md2;
+    // int mi, mj, mi2, mj2;
+	// for(int j = res[1]-1; j >= 0; j--) {
+	// 	for(int i = 0; i < res[0]; i++) {
+	// 		int ind = i*res[1]+j;
+	// 		Matrix2d dx = upwindJac(material, velExact, i, j, valid, h, res);
+	// 		DX[ind] = dx;
+	// 		Vector2d p = origin + h*Vector2d(i, j);
+	// 		Vector2d ph = p-center;
+	// 		Rotation2D<double> rot(-0.785398);
+	// 		Vector2d rotate = rot * ph;
+	// 		p = rotate+center;
+	// 		Vector2d m = material[ind];
+	// 		if(validcpy[ind]) {
+	// 			printf("\033[0;31m(% 04.1f,% 04.1f)\033[0m ", m(0), m(1));
+	// 		}
+	// 		else {
+	// 			printf("(% 04.1f,% 04.1f) ", m(0), m(1));
+	// 		}
+	// 		matout << p(0) << " " << p(1) << " " << "0\n";
+	// 		matout << m(0) << " " << m(1) << " " << "1\n\n\n";
+	// 		double diff = (p-m).norm();
+	// 		if(diff > err) {
+	// 			err = diff;
+	// 		}
+    //         if(i != res[0]-1) {
+    //             Vector2d mtmp = material[(i+1)*res[1]+j];
+    //             diff = (m-mtmp).norm();
+    //             if(diff > maxd) {
+    //                 maxd = diff;
+    //                 mi = i;
+    //                 mj = j;
+    //                 mi2 = i+1;
+    //                 mj2 = j;
+    //                 md1 = m;
+    //                 md2 = mtmp;
+    //             }
+    //         }
+    //         if(i != 0) {
+    //             Vector2d mtmp = material[(i-1)*res[1]+j];
+    //             diff = (m-mtmp).norm();
+    //             if(diff > maxd) {
+    //                 maxd = diff;
+    //                 mi = i;
+    //                 mj = j;
+    //                 mi2 = i-1;
+    //                 mj2 = j;
+    //                 md1 = m;
+    //                 md2 = mtmp;
+    //             }
+    //         }
+    //         if(j != res[1]-1) {
+    //             Vector2d mtmp = material[i*res[1]+(j+1)];
+    //             diff = (m-mtmp).norm();
+    //             if(diff > maxd) {
+    //                 maxd = diff;
+    //                 mi = i;
+    //                 mj = j;
+    //                 mi2 = i;
+    //                 mj2 = j+1;
+    //                 md1 = m;
+    //                 md2 = mtmp;
+    //             }
+    //         }
+    //         if(j != 0) {
+    //             Vector2d mtmp = material[i*res[1]+(j-1)];
+    //             diff = (m-mtmp).norm();
+    //             if(diff > maxd) {
+    //                 maxd = diff;
+    //                 mi = i;
+    //                 mj = j;
+    //                 mi2 = i;
+    //                 mj2 = j-1;
+    //                 md1 = m;
+    //                 md2 = mtmp;
+    //             }
+    //         }
+	// 	}
+	// 	printf("\n");
+	// }
+	// printf("Max Error: %f\n", err);
+	// matout.close();
+    // printf("Max Dist: %f\n", maxd);
+    // printf("%d, %d: (%f, %f)\n", mi, mj, md1(0), md1(1));
+    // printf("%d, %d: (%f, %f)\n", mi2, mj2, md2(0), md2(1));
+    //
+	// std::ofstream debug("fsmat");
+	// debug << "\nDX: \n";
+	// for(int j = res[1]-2; j >= 0; j--) {
+	// 	for(int k = 0; k < 2; k++) {
+	// 		for(int i = 0; i < res[0]-1; i++) {
+	// 			int ind = i*res[0]+j;
+	// 			debug << "[";
+	// 			if(DX[ind](k,0) < 0) {
+	// 				debug << std::fixed << std::setprecision(6) << DX[ind](k,0);
+	// 			}
+	// 			else {
+	// 				debug << std::fixed << std::setprecision(6) << DX[ind](k,0);
+	// 			}
+	// 			debug << ",";
+	// 			if(DX[ind](k,1) < 0) {
+	// 				debug << std::fixed << std::setprecision(6) << DX[ind](k,1);
+	// 			}
+	// 			else {
+	// 				debug << std::fixed << std::setprecision(6) << DX[ind](k,1);
+	// 			}
+	// 			debug << "] ";
+	// 		}
+	// 		debug << "\n";
+	// 	}
+	// 	debug << "\n";
+	// }
+	// debug << "\n";
+	// debug.close();
+    // std::exit(0);
 
     std::vector<char> tmpvalid = valid;
     /// for(int i = 0; i < res[0]; i++) {
@@ -1075,12 +1077,23 @@ int main(int argc, char** argv) {
     }
 
     std::ofstream diff("veldiff.txt");
+    std::ofstream disp("displacement.txt");
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
             int index = i*res[1]+j;
+            Vector2d xg = origin+h*Vector2d(i,j);
+            Vector2d ph = xg-center;
+            Rotation2D<double> rot(-0.785398);
+            Vector2d rotate = rot * ph;
+            Vector2d np = rotate+center;
+            if(valid[index]) {
+                disp << xg(0) << " " << xg(1) << " " << (field[index]-xg)(0) << " " <<  (field[index]-xg)(1) << " 0 255 0\n";
+            }
+            // else {
+            //     disp << xg(0) << " " << xg(1) << " " << (field[index]-xg)(0) << " " <<  (field[index]-xg)(1) << " 255 0 0\n";
+            // }
             if(field[index](0) < 100 && field[index](1) < 100) {
-                Vector2d xg = h*Vector2d(i,j);
-                Vector2d d = field[index]-exact[index];
+                Vector2d d = field[index]-np;
                 diff << xg(0) << " " << xg(1) << " " << d.norm() << "\n";
             }
         }

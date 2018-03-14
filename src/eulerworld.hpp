@@ -14,21 +14,14 @@ public:
     //Temp
     Eigen::Matrix2d B;         //B matrix from APIC paper
 
-    Eigen::Vector2d u;        //Initial position (rest state)
     Eigen::Vector2d x, v;      //postition, velocity
-    #ifndef NDEBUG
-    std::vector<Eigen::Vector2d> hist;
-    #endif
     Eigen::Vector3d color;
-    Eigen::Vector3d c1, c2;
-    Eigen::Matrix2d gradientE; //elastic portion of deformation gradient
-    Eigen::Matrix2d gradientP; //plastic portion of deformation gradient
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
 
     Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m):
-	  B(Eigen::Matrix2d::Zero()), u(x), x(x), v(v), color(color), gradientE(Eigen::Matrix2d::Identity()), gradientP(Eigen::Matrix2d::Identity()), m(m), rho(0.0), vol(0.0) {}
+	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
@@ -94,6 +87,7 @@ public:
     double rayleighBeta;
     VectorX quarterVolumeFractions;
     std::vector<double> nodeSolidVolumeFraction;
+    std::vector<Particle> matParticles;
     //From SVD of F
     //These are all used at the same time and nowhere else, no need for an array
     MatrixN R;
@@ -123,6 +117,7 @@ public:
     std::vector<Particle> particles;
     #endif
     int inc;
+    bool initializing;
 
     int testVel;
     World(std::string config);
@@ -149,10 +144,12 @@ public:
     void computeSolidMass(bool usesdf=false);
     void gatherSolidMasses();
     MatrixN crossMatrix(const VectorN& vec);
+    void gridToParticles();
+    void particlesToGrid();
 
     //Helpers
     void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);
-    void velSweep(Eigen::Vector2d *vel, double *field, int iters, double eps);
+    void velSweep(std::vector<Eigen::Vector2d>& vel, const std::vector<double>& field, int iters, double eps);
     void sweepAve(Eigen::Vector2d *vel, int iters);
 
     benlib::Profiler prof;

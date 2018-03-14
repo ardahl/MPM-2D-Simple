@@ -2,7 +2,7 @@
     "testVel" : 1,
     //500,000
 	//"dt" : 6.66666667e-8,
-	"steps" : 50000,
+	"steps" : 10000,
 	"totalTime" : 1,
 	//Not actually used, but particles might be needed for visualization so they're staying for now
 	"objects" : [
@@ -15,10 +15,10 @@
 		//.15 x .15 - ~6in x 6in
 		//.6 x .6 ~ 2ft x 2ft
 		//.3048 x .3048 ~ 1ft x 1ft
-		"origin" : [-0.3, 0],
-		"size" : [32, 32],
+		"origin" : [-0.3, -0.3],
+		"size" : [60, 60],
 		//"h" : 0.015,
-		"end" : [0.3, 0.6]
+		"end" : [0.3, 0.3]
 	},
  	"mass" : 1.0,
 	"lame" : [5000, 10000],

@@ -7,7 +7,7 @@
 #include <iomanip>
 
 using namespace Eigen;
-/// #define SLOMO
+#define SLOMO
 
 #ifndef NDEBUG
 extern std::ofstream debug;
@@ -17,7 +17,7 @@ extern std::ofstream debug;
 //For slow motion, set start/end frame
 int startFrame = 0;
 int endFrame = 1;
-int slowmoSteps = 100;
+int slowmoSteps = 1000;  //Output every x steps
 #endif
 
 int main(int argc, char** argv) {
@@ -43,11 +43,11 @@ int main(int argc, char** argv) {
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());
 #endif
-	
+
     std::string config = std::string(argv[1]);
     World world(config);
     world.init();
-  
+
 	while (world.elapsedTime < world.totalTime) {
       #ifndef SLOMO
       if (timeSinceLastFrame > 1.0/30.0) {
@@ -91,4 +91,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-

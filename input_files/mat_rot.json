@@ -1,21 +1,19 @@
 {
-	//"dt" : 0.0000000833333333333,
     "steps" : 500000,
 	"totalTime" : 1,
 	"objects" : [
 		{
 			"type" : "parts",
-			"filename" : "parts/disc_jitter_small.bgeo"
+			"filename" : "parts/mat_rot.bgeo"
 		}
 	],
 	"grid" : {
 		"origin" : [-0.3, 0.2],
 		"size" : [32, 32],
         "end" : [0.3, 0.8]
-		//"h" : 0.015
 	},
  	"mass" : 0.001,
-	"lame" : [0, 0],
-	"massPropDamp" : 1.0,
+	"lame" : [5000, 10000],
+	//"massPropDamp" : 1.0,
 	"gravity" : [0.0, 0.0]
 }
