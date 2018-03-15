@@ -117,7 +117,6 @@ public:
     std::vector<Particle> particles;
     #endif
     int inc;
-    bool initializing;
 
     int testVel;
     World(std::string config);
@@ -144,8 +143,12 @@ public:
     void computeSolidMass(bool usesdf=false);
     void gatherSolidMasses();
     MatrixN crossMatrix(const VectorN& vec);
+    //Base version from paper
     void gridToParticles();
     void particlesToGrid();
+    //Apic version for testing
+    void apicg2p();
+    void apicp2g();
 
     //Helpers
     void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);

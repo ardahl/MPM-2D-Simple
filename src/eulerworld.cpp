@@ -384,7 +384,7 @@ World::World(std::string config) {
 
     inc = steps;
     #ifndef NDEBUG
-    inc = 10000;
+    inc = 100;
     // inc = 1;
     count = 0;
     sMax = 31;
@@ -393,7 +393,6 @@ World::World(std::string config) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
     }
     #endif
-    initializing = true;
 }
 
 World::~World() {
@@ -641,7 +640,6 @@ void World::init() {
         }
     }
     vecWorkspace = velocity;
-    initializing = false;
 }
 
 
@@ -1299,8 +1297,13 @@ void World::finalizeSolution() {
     //grid to particles and particles to grid
     {
     auto timer = prof.timeName("\tParticles and Grid");
+    #ifndef APICVEL
     gridToParticles();
     particlesToGrid();
+    #else
+    apicg2p();
+    apicp2g();
+    #endif
     }
     //extend velocity field
     {
@@ -1730,6 +1733,168 @@ void World::particlesToGrid() {
         velocity[iToW.first] = iToW.second.first / iToW.second.second;
         mass[iToW.first] = 1;
     }
+}
+
+inline double weight(double x) {
+    double ax = std::abs(x);
+    double x2 = x*x;
+    double ax3 = x2*ax;
+    if(ax < 1.0) {
+        return 0.5*ax3 - x2 + (2.0/3.0);
+    } else if(ax < 2.0) {
+        return (-1.0/6.0)*ax3 + x2 - 2.0*ax + (4.0/3.0);
+    }
+    return 0;
+}
+
+inline void bounds(const VectorN &offset, const int res[2], int *xbounds, int *ybounds) {
+    xbounds[0] = ((int)(-2 + offset(0)))+1;
+    xbounds[1] = ((int)( 2 + offset(0)))+1;
+    ybounds[0] = ((int)(-2 + offset(1)))+1;
+    ybounds[1] = ((int)( 2 + offset(1)))+1;
+}
+
+void World::apicg2p() {
+    for(size_t i = 0; i < matParticles.size(); i++) {
+        Particle &p = matParticles[i];
+        //Update velocities
+        p.B = MatrixN::Zero();
+        VectorN apic = VectorN::Zero();
+        VectorN offset = (p.x - origin) / h;
+        int xbounds[2], ybounds[2];
+        bounds(offset, res, xbounds, ybounds);
+        for(int j = xbounds[0]; j < xbounds[1]; j++) {
+            double w1 = weight(offset(0) - j);
+            for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                double w = w1*weight(offset(1) - k);
+                int index = j*res[1] + k;
+                // if(!valid[index]) {
+                //     printf("Particle grabbing outside\n");
+                // }
+                VectorN xg = origin + h*VectorN(j, k);
+                VectorN wvel = w * velocity[index];
+                apic += wvel;
+                p.B += wvel * (xg - p.x).transpose();
+            }
+        }
+        #ifndef NDEBUG
+        if(apic.hasNaN()) {
+            printf("\n\nAPIC Vel has NaN\n");
+            std::cout << apic << std::endl;
+            exit(0);
+        }
+        #endif
+        p.v = apic;
+        //For testing, do RK2 (trapezoidal) time integration. Use bilinear(2D) interpolation for values
+        //Bilinear for starting value
+        //Do a temperary timestep for candidate position
+        //Bilinear for ending value
+        //Average and set velocity to that
+
+        //Mass proportional damping
+        // p.v = mp.massPropDamp * p.v;
+
+        #ifndef NDEBUG
+        if(p.v.hasNaN()) {
+            printf("Vel has NaN\n");
+            std::cout << p.v << std::endl;
+            exit(0);
+        }
+        #endif
+
+        //Update Positions
+        p.x += dt * p.v;
+
+        #ifndef NDEBUG
+        if(p.x.hasNaN()) {
+            printf("Pos has NaN\n");
+            std::cout << p.x << std::endl;
+            exit(0);
+        }
+        #endif
+        //Boundary collisions
+        //Make sure there's a boundary of 2 cells for each side since the weighting
+        //function will touch 2 cells out
+        double lx = origin[0]+2*h;
+        double ly = origin[1]+2*h;
+        double ux = origin[0]+(res[0]-3)*h; //The last index is res-1 so it's -3
+        double uy = origin[1]+(res[1]-3)*h;
+        if(p.x(0) < lx) {
+            p.x(0) = lx+EPS;
+            p.v(0) *= -1;          //reverse velocity
+        }
+        if(p.x(1) < ly) {
+            p.x(1) = ly+EPS;
+            p.v(1) *= -1;
+        }
+        if(p.x(0) > ux) {
+            p.x(0) = ux-EPS;
+            p.v(0) *= -1;
+        }
+        if(p.x(1) > uy) {
+            p.x(1) = uy-EPS;
+            p.v(1) *= -1;
+        }
+    }
+}
+
+void World::apicp2g() {
+    MatrixN tmpD = ((h*h)/3.0)*MatrixN::Identity();
+    MatrixN tmpDinv = (3.0/(h*h))*MatrixN::Identity();
+    mass.clear();
+
+    for(size_t i = 0; i < matParticles.size(); i++) {
+        Particle &p = matParticles[i];
+        if(stepNum == 0) {
+            MatrixN C;
+            C << 0, -5.0, 5.0, 0; //Rotational (rotation=0.75) Case
+            // C << 0, 0, 0, 0;
+            p.B = C * tmpD;
+        }
+        VectorN offset = (p.x - origin) / h;
+        int xbounds[2], ybounds[2];
+        bounds(offset, res, xbounds, ybounds);
+        VectorN xp = p.x;                                      //particle position
+        for(int j = xbounds[0]; j < xbounds[1]; j++) {
+            double w1 = weight(offset(0) - j);
+            for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                int index = j*res[1] + k;
+                double w = w1*weight(offset(1) - k);
+                mass[index] += w * p.m;
+            }
+        }
+        VectorN mv = p.m*p.v;
+        MatrixN mBD = p.m*p.B*tmpDinv;
+        for(int j = xbounds[0]; j < xbounds[1]; j++) {
+            double w1 = weight(offset(0) - j);
+            for(int k = ybounds[0]; k < ybounds[1]; k++) {
+                double w = w1*weight(offset(1) - k);
+                VectorN xg = origin + h*VectorN(j, k);
+                velocity[j*res[1] + k] += w * (mv + mBD*(xg-xp).eval());
+            }
+        }
+    }
+	for(int i = 0; i < res[0]; i++) {
+		for(int j = 0; j < res[1]; j++) {
+            int index = i*res[1]+j;
+            if(mass[index] < EPS) {
+                velocity[index] = VectorN(0.0, 0.0);
+                // valid[index] = 0;
+                mass[index] = 0;
+            }
+            else {
+                velocity[index] /= mass[index];
+                // valid[index] = 1;
+            }
+            #ifndef NDEBUG
+            if(velocity[index].hasNaN()) {
+                printf("interpolated vel NaN at (%d, %d)\n", i, j);
+                std::cout << velocity[index] << std::endl;
+                exit(0);
+            }
+            #endif
+        }
+	}
 }
 
 /************************
