@@ -3,7 +3,7 @@
 	//500,000
 	//"dt" : 6.66666667e-8,
 	"steps" : 100,
-	"totalTime" : 1,
+	"totalTime" : 3,
 	//Not actually used, but particles might be needed for visualization so they're staying for now
 	"objects" : [
 		{

@@ -1,0 +1,23 @@
+{
+	//"dt" : 0.000000666666666666,
+	"dt" : 0.000000166666666666,
+	"totalTime" : 4,
+	"objects" : [
+		{
+			"type" : "parts",
+			"filename" : "parts/disc_jitter.bgeo"
+		}
+	],
+	"grid" : {
+		"origin" : [-0.5, 0.0],
+		"size" : [40, 40],
+		"h" : 0.025
+		//"size" : [20, 20],
+		//"h" : 0.1
+	},
+ 	"mass" : 1.0,
+	"lame" : [0, 1.0e4],
+	"massPropDamp" : 0.99999999,
+	//"massPropDamp" : 1.0,	
+	"gravity" : [0.0, 0.0]
+}

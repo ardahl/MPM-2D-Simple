@@ -18,6 +18,8 @@
 #define DIFF
 // Velocity extrapolation by fast sweeping or simple average
 #define FASTSWEEP
+// Use APIC for velocity transfer
+#define APICVEL
 
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later

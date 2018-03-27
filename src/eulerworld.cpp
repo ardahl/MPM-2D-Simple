@@ -387,7 +387,7 @@ World::World(std::string config) {
     inc = 100;
     // inc = 1;
     count = 0;
-    sMax = 31;
+    sMax = 91;
     matTrans = new Vector2d*[sMax];
     for(int i = 0; i < sMax; i++) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
@@ -526,6 +526,7 @@ void World::init() {
     /// Vector2d middle = origin + h*Vector2d((res[0]-1)/2, (res[1]-1)/2);
     double size[2] = {0.15, 0.15};	// ~1ft wide
     int count = 0;
+    double scale = 1.0;
     for(int i = 0; i < res[0]; i++) {
         for(int j = 0; j < res[1]; j++) {
             int index = i*res[1]+j;
@@ -539,8 +540,6 @@ void World::init() {
             X[index] = pos;
             // color[index] = Vector3d(135,206,255);
             ///Rotation
-            // double scale = 1.5;
-            double scale = 5;
             if(testVel == 0) {
                 if(i == 0 && j == 0) {
                     printf("Vel: Rotation\n");
@@ -622,6 +621,7 @@ void World::init() {
     double density = quarterCellSolidMass / (h * h * 0.25);
     double volume = (h * h) / particlesPerCell;
 
+    MatrixN tmpD = ((h*h)/3.0)*MatrixN::Identity();
     for(int i = tightMin[0]; i < tightMax[0]; i++) {
         for(int j = tightMin[1]; j < tightMax[1]; j++) {
             int ind = i*res[1] + j;
@@ -635,7 +635,16 @@ void World::init() {
                 double d = density * volume;
                 VectorN v = interpolate_value(jitter, velocity, origin, res, h);
                 Particle p(jitter, v, color[ind], d);
-                matParticles.push_back(p);
+            	MatrixN C;
+            	if(testVal == 0) {
+		    C << 0, -scale, scale, 0; //Rotational (rotation=0.75) Case
+            	}
+		else { //Linear and no velocity cases both have 0 gradient
+		    C << 0, 0, 0, 0;
+		}
+		p.B = C * tmpD;
+        }
+		matParticles.push_back(p);
             }
         }
     }
@@ -1839,18 +1848,11 @@ void World::apicg2p() {
 }
 
 void World::apicp2g() {
-    MatrixN tmpD = ((h*h)/3.0)*MatrixN::Identity();
     MatrixN tmpDinv = (3.0/(h*h))*MatrixN::Identity();
     mass.clear();
 
     for(size_t i = 0; i < matParticles.size(); i++) {
         Particle &p = matParticles[i];
-        if(stepNum == 0) {
-            MatrixN C;
-            C << 0, -5.0, 5.0, 0; //Rotational (rotation=0.75) Case
-            // C << 0, 0, 0, 0;
-            p.B = C * tmpD;
-        }
         VectorN offset = (p.x - origin) / h;
         int xbounds[2], ybounds[2];
         bounds(offset, res, xbounds, ybounds);
