@@ -14,7 +14,7 @@ public:
     //Temp
     Eigen::Matrix2d B;         //B matrix from APIC paper
 
-    Eigen::Vector2d x, v;      //postition, velocity
+    Eigen::Vector2d x, v, vo;      //postition, velocity
     Eigen::Vector3d color;
     double m;                  //mass
     double rho;                //density
@@ -149,6 +149,8 @@ public:
     //Apic version for testing
     void apicg2p();
     void apicp2g();
+    void apicg2p2();
+    void apicp2g2();
 
     //Helpers
     void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);

@@ -2,7 +2,7 @@
     "testVel" : 0,
 	//500,000
 	//"dt" : 6.66666667e-8,
-	"steps" : 100,
+	"steps" : 20000,
 	"totalTime" : 3,
 	//Not actually used, but particles might be needed for visualization so they're staying for now
 	"objects" : [
@@ -21,7 +21,8 @@
 		"end" : [0.3, 0.3]
 	},
  	"mass" : 1.0,
-	"lame" : [5000, 10000],
+    "lame" : [5000, 10000],
+    /* "lame" : [400000, 1000000], */
 	"massPropDamp" : 1.0
 	//"gravity" : [0.0, -9.8]
 	//"rotate" : 0.05

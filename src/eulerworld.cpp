@@ -9,6 +9,7 @@
 #include <random>
 #include <unordered_map>
 #include <utility>
+#include <tuple>
 #include "json/json.h"
 #include "range.hpp"
 
@@ -63,7 +64,7 @@ World::World(std::string config) {
 
 	totalTime = root.get("totalTime", 5.0).asDouble();
 
-    double lambda=0, mu=0;                      //Lame Constants for stress
+    lambda=0, mu=0;                      //Lame Constants for stress
     double massPropDamp;
 	// read global material properties, these may be overridden per object
     auto lameIn = root["lame"];
@@ -384,10 +385,11 @@ World::World(std::string config) {
 
     inc = steps;
     #ifndef NDEBUG
-    inc = 100;
-    // inc = 1;
+    inc = 20000;
+    // inc = 20;
     count = 0;
     sMax = 91;
+    // sMax = 11;
     matTrans = new Vector2d*[sMax];
     for(int i = 0; i < sMax; i++) {
         matTrans[i] = new Vector2d[res[0]*res[1]];
@@ -558,6 +560,9 @@ void World::init() {
                 }
                 velocity[index] = VectorN::Zero();
             }
+            if(i == 0 || j == 0 || i == res[0]-1 || j == res[1]-1) {
+                velocity[index] = VectorN::Zero();
+            }
             //Create a square in the center
             /// if(i >= (res[0]/2)-4 && i <= (res[0]/2)+4 && j >= (res[1]/2)-4 && j <= (res[1]/2)+4) {
             if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {	//circle
@@ -620,6 +625,7 @@ void World::init() {
     int particlesPerCell = 32;
     double density = quarterCellSolidMass / (h * h * 0.25);
     double volume = (h * h) / particlesPerCell;
+    printf("Particle Mass: %f\n", density*volume);
 
     MatrixN tmpD = ((h*h)/3.0)*MatrixN::Identity();
     for(int i = tightMin[0]; i < tightMax[0]; i++) {
@@ -636,19 +642,19 @@ void World::init() {
                 VectorN v = interpolate_value(jitter, velocity, origin, res, h);
                 Particle p(jitter, v, color[ind], d);
             	MatrixN C;
-            	if(testVal == 0) {
-		    C << 0, -scale, scale, 0; //Rotational (rotation=0.75) Case
+            	if(testVel == 0) {
+		             C << 0, -scale, scale, 0; //Rotational (rotation=0.75) Case
             	}
-		else { //Linear and no velocity cases both have 0 gradient
-		    C << 0, 0, 0, 0;
-		}
-		p.B = C * tmpD;
-        }
-		matParticles.push_back(p);
+		        else { //Linear and no velocity cases both have 0 gradient
+		             C << 0, 0, 0, 0;
+		        }
+		        p.B = C * tmpD;
+		        matParticles.push_back(p);
             }
         }
     }
     vecWorkspace = velocity;
+    printf("Number of Particles: %d\n", (int)matParticles.size());
 }
 
 
@@ -688,7 +694,7 @@ void World::step() {
             for(int j = 0; j < res[1]; j++) {
                 Vector2d p = origin+h*Vector2d(i,j);
                 int ind = i*res[1]+j;
-                vout << p(0) << " " << p(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " 0 0 255" << "\n";
+                vout << p(0) << " " << p(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " 0 0 255\n";
             }
         }
         vout.close();
@@ -1306,13 +1312,86 @@ void World::finalizeSolution() {
     //grid to particles and particles to grid
     {
     auto timer = prof.timeName("\tParticles and Grid");
+    // std::vector<VectorN> velold = velocity;
+    // std::ofstream o1("./euler/v1");
+    // for(int i = 0; i < res[0]; i++) {
+    //     for(int j = 0; j < res[1]; j++) {
+    //         int ind = i*res[1]+j;
+    //         VectorN xg = origin + h*VectorN(i, j);
+    //         Vector3i col(255,0,0);
+    //         if(valid[ind]) {
+    //             col = Vector3i(0,255,0);
+    //         }
+    //         o1 << xg(0) << " " << xg(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
+    //     }
+    // }
+    // o1.close();
     #ifndef APICVEL
+    //Output velocity after each step
     gridToParticles();
+    // std::ofstream o2("./euler/v2");
+    // for(int i = 0; i < (int)matParticles.size(); i+=8) {
+    //     VectorN x = matParticles[i].x;
+    //     VectorN v = matParticles[i].v;
+    //     o2 << x(0) << " " << x(1) << " " << v(0) << " " << v(1) << " 0 255 0\n";
+    // }
+    // o2.close();
+    // std::ofstream pd("./euler/pd_reg");
+    // for(int i = 0; i < (int)matParticles.size(); i+=8) {
+    //     VectorN x = matParticles[i].x;
+    //     VectorN vo = matParticles[i].vo;
+    //     VectorN v = matParticles[i].v;
+    //     pd << x(0) << " " << x(1) << " " << (v-vo)(0) << " " << (v-vo)(1) << " 0 255 0\n";
+    // }
+    // pd.close();
     particlesToGrid();
     #else
-    apicg2p();
-    apicp2g();
+    apicg2p2();
+    // std::ofstream o2("./euler/v2");
+    // for(int i = 0; i < (int)matParticles.size(); i+=8) {
+    //     VectorN x = matParticles[i].x;
+    //     VectorN v = matParticles[i].v;
+    //     o2 << x(0) << " " << x(1) << " " << v(0) << " " << v(1) << " 0 255 0\n";
+    // }
+    // o2.close();
+    // std::ofstream pd("./euler/pd_apic");
+    // for(int i = 0; i < (int)matParticles.size(); i+=8) {
+    //     VectorN x = matParticles[i].x;
+    //     VectorN vo = matParticles[i].vo;
+    //     VectorN v = matParticles[i].v;
+    //     pd << x(0) << " " << x(1) << " " << (v-vo)(0) << " " << (v-vo)(1) << " 0 255 0\n";
+    // }
+    // pd.close();
+    apicp2g2();
     #endif
+    // std::ofstream o3("./euler/v3");
+    // for(int i = 0; i < res[0]; i++) {
+    //     for(int j = 0; j < res[1]; j++) {
+    //         int ind = i*res[1]+j;
+    //         VectorN xg = origin + h*VectorN(i, j);
+    //         Vector3i col(255,0,0);
+    //         if(valid[ind]) {
+    //             col = Vector3i(0,255,0);
+    //         }
+    //         if(i==47 && j==29) {
+    //             col = Vector3i(0,0,255);
+    //         }
+    //         o3 << xg(0) << " " << xg(1) << " " << velocity[ind](0) << " " << velocity[ind](1) << " " << col(0) << " " << col(1) << " " << col(2) << "\n";
+    //     }
+    // }
+    // o3.close();
+    // std::vector<VectorN> velnew = velocity;
+    // std::ofstream vd("./euler/vd");
+    // for(int i = 0; i < res[0]; i++) {
+    //     for(int j = 0; j < res[1]; j++) {
+    //         int ind = i*res[1]+j;
+    //         VectorN xg = origin + h*VectorN(i,j);
+    //         VectorN veld = velnew[ind] - velold[ind];
+    //         vd << xg(0) << " " << xg(1) << " " << veld(0) << " " << veld(1) << "\n";
+    //     }
+    // }
+    // vd.close();
+    // std::exit(0);
     }
     //extend velocity field
     {
@@ -1589,6 +1668,7 @@ void World::gridToParticles() {
     #pragma omp parallel for schedule(static)
     for(int c = 0; c < (int)matParticles.size(); c++) {
         Particle& p = matParticles[c];
+        p.vo = p.v;
         double x = (p.x(0) - origin(0)) / h;
         double y = (p.x(1) - origin(1)) / h;
         int i = std::floor(x) - 1;
@@ -1764,6 +1844,7 @@ inline void bounds(const VectorN &offset, const int res[2], int *xbounds, int *y
 }
 
 void World::apicg2p() {
+    // std::ofstream advectout("./euler/advect");
     for(size_t i = 0; i < matParticles.size(); i++) {
         Particle &p = matParticles[i];
         //Update velocities
@@ -1778,7 +1859,7 @@ void World::apicg2p() {
                 double w = w1*weight(offset(1) - k);
                 int index = j*res[1] + k;
                 // if(!valid[index]) {
-                //     printf("Particle grabbing outside\n");
+                    // printf("Particle grabbing outside\n");
                 // }
                 VectorN xg = origin + h*VectorN(j, k);
                 VectorN wvel = w * velocity[index];
@@ -1812,6 +1893,7 @@ void World::apicg2p() {
         #endif
 
         //Update Positions
+        // VectorN oldPos = p.x;
         p.x += dt * p.v;
 
         #ifndef NDEBUG
@@ -1844,11 +1926,155 @@ void World::apicg2p() {
             p.x(1) = uy-EPS;
             p.v(1) *= -1;
         }
+
+        // if(i%8 == 0) {
+        //     advectout << oldPos(0) << " " << oldPos(1) << " 0\n";
+        //     advectout << p.x(0) << " " << p.x(1) << " 1\n\n\n";
+        // }
     }
+    // advectout.close();
+}
+
+void World::apicg2p2() {
+    // std::ofstream advectout("./euler/advect");
+    double alpha = 0.99;
+    for(size_t c = 0; c < matParticles.size(); c++) {
+        Particle &p = matParticles[c];
+        p.vo = p.v;
+        //Update velocities
+        p.B = MatrixN::Zero();
+        VectorN apic = VectorN::Zero();
+        VectorN flip = VectorN::Zero();
+        double x = (p.x(0) - origin(0)) / h;
+        double y = (p.x(1) - origin(1)) / h;
+        int i = std::floor(x) - 1;
+        int j = std::floor(y) - 1;
+        for(int r = i; r < i+4; r++) {
+            for(int t = j; t < j+4; t++) {
+                if(r < 0 || t < 0 || r > res[0]-1 || t > res[1]-1) {
+                    continue;
+                }
+                int ind = r*res[1]+t;
+                if(mass[ind] == 0) {
+                    continue;
+                }
+                VectorN diff = (1.0/h) * (p.x - origin);
+                diff -= VectorN(r, t);
+                VectorN n = VectorN::Zero();
+                for(int a = 0; a < DIM; a++) {
+                    if(std::abs(diff(a)) < 1) {
+                        n(a) = 0.5 * std::abs(std::pow(diff(a), 3)) - diff(a)*diff(a) + 2.0/3.0;
+                    }
+                    else if(std::abs(diff(a)) < 2) {
+                        n(a) = -1.0/6.0 * std::abs(std::pow(diff(a), 3)) + diff(a)*diff(a) - 2*std::abs(diff(a)) + 4.0/3.0;
+                    }
+                }
+                double w = n(0) * n(1);
+
+                VectorN xg = origin + h*VectorN(r, t);
+                VectorN wvel = w * velocity[ind];
+                apic += wvel;
+                flip += (velocity[ind] - vecWorkspace[ind]) * w;
+                p.B += wvel * (xg - p.x).transpose();
+            }
+        }
+        #ifndef NDEBUG
+        if(apic.hasNaN()) {
+            printf("\n\nAPIC Vel has NaN\n");
+            std::cout << apic << std::endl;
+            exit(0);
+        }
+        #endif
+        flip += p.v;
+        p.v = (1 - alpha) * apic + alpha * flip;
+        // p.v = apic;
+        //Mass proportional damping
+        // p.v = mp.massPropDamp * p.v;
+    }
+
+    VectorN wallNormals[4] = {VectorN(1, 0), VectorN(0, 1),
+                              VectorN(-1, 0), VectorN(0, -1)};
+    double boundaries[4] = {origin(0),
+                            origin(1),
+                            origin(0) + h * (res[0] - 1),
+                            origin(1) + h * (res[1] - 1)};
+    double wallThickness = 0.015;
+    double springConstant = 10000;
+    double friction = 0.5;
+    #pragma omp parallel for schedule(dynamic)
+    for(int c = 0; c < (int)matParticles.size(); c++) {
+        Particle& p = matParticles[c];
+        VectorN futurePos = p.x;
+        double fx = (futurePos(0) - origin(0)) / h;
+        double fy = (futurePos(1) - origin(1)) / h;
+        int i = std::floor(fx);
+        int j = std::floor(fy);
+        i = std::min(std::max(i, 0), res[0] - 2);
+        j = std::min(std::max(j, 0), res[1] - 2);
+        // handle collision with walls
+        for(int b = 0; b < 4; b++) {
+            double dist = std::abs(p.x(b % 2) - boundaries[b]);
+            if(dist < wallThickness) {
+                double overlap = wallThickness - dist;
+                int xIndex = i;
+                if(b == 0) {
+                    xIndex = 0;
+                }
+                else if(b == 2) {
+                    xIndex = res[0] - 1;
+                }
+                int yIndex = j;
+                if(b == 1) {
+                    yIndex = 0;
+                }
+                else if(b == 3) {
+                    yIndex = res[1] - 1;
+                }
+                VectorN v_other = velocity[xIndex*res[1]+yIndex];
+                VectorN vrel = p.v - v_other;
+                double vn = vrel.dot(wallNormals[b]);
+                if(vn <= 0) {
+                    double impulse = -std::min(dt*springConstant*overlap, p.m*(0.1*overlap/dt-vn));
+                    double delta_vn = -impulse / p.m;
+                    VectorN vt = vrel - vn * wallNormals[b];
+                    VectorN new_vt = std::max(0.1-friction*delta_vn/vt.norm(), 0.0) * vt;
+                    p.v = (vn + delta_vn) * wallNormals[b] + new_vt + v_other;
+                    break;
+                }
+            }
+        }
+
+        #ifndef NDEBUG
+        if(p.v.hasNaN()) {
+            printf("Vel has NaN\n");
+            std::cout << p.v << std::endl;
+            exit(0);
+        }
+        #endif
+
+        //Update Positions
+        // VectorN oldPos = p.x;
+        p.x += dt * p.v;
+
+        #ifndef NDEBUG
+        if(p.x.hasNaN()) {
+            printf("Pos has NaN\n");
+            std::cout << p.x << std::endl;
+            exit(0);
+        }
+        #endif
+        // if(i%8 == 0) {
+        //     advectout << oldPos(0) << " " << oldPos(1) << " 0\n";
+        //     advectout << p.x(0) << " " << p.x(1) << " 1\n\n\n";
+        // }
+    }
+    // advectout.close();
 }
 
 void World::apicp2g() {
     MatrixN tmpDinv = (3.0/(h*h))*MatrixN::Identity();
+    std::unordered_map<int, double> indexToWeight;
+    std::vector<VectorN> vel(totalCells, VectorN::Zero());
     mass.clear();
 
     for(size_t i = 0; i < matParticles.size(); i++) {
@@ -1856,13 +2082,19 @@ void World::apicp2g() {
         VectorN offset = (p.x - origin) / h;
         int xbounds[2], ybounds[2];
         bounds(offset, res, xbounds, ybounds);
-        VectorN xp = p.x;                                      //particle position
+        VectorN xp = p.x;
         for(int j = xbounds[0]; j < xbounds[1]; j++) {
             double w1 = weight(offset(0) - j);
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
                 int index = j*res[1] + k;
                 double w = w1*weight(offset(1) - k);
                 mass[index] += w * p.m;
+                if(indexToWeight.find(index) == indexToWeight.end()) {
+                    indexToWeight[index] = w;
+                }
+                else {
+                    indexToWeight[index] += w;
+                }
             }
         }
         VectorN mv = p.m*p.v;
@@ -1872,31 +2104,167 @@ void World::apicp2g() {
             for(int k = ybounds[0]; k < ybounds[1]; k++) {
                 double w = w1*weight(offset(1) - k);
                 VectorN xg = origin + h*VectorN(j, k);
-                velocity[j*res[1] + k] += w * (mv + mBD*(xg-xp).eval());
+                vel[j*res[1] + k] += w * (mv + mBD*(xg-xp));
+                // if(j==47 && k==29) {
+                //     printf("w: %f\n", w);
+                //     printf("mv: (%f %f)\n", mv(0), mv(1));
+                //     printf("%f * [%f %f; %f %f] * [%f %f; %f %f]\n", p.m, p.B(0,0), p.B(0,1), p.B(1,0), p.B(1,1), tmpDinv(0,0), tmpDinv(0,1), tmpDinv(1,0), tmpDinv(1,1));
+                //     printf("mBD: [%f %f; %f %f]\n", mBD(0,0), mBD(0,1), mBD(1,0), mBD(1,1));
+                //     printf("diff: (%f %f)\n", (xg-xp)(0), (xg-xp)(1));
+                //     VectorN tmp = w * (mv + mBD*(xg-xp));
+                //     printf("add: (%f %f)\n", tmp(0), tmp(1));
+                //     int ind = j*res[1]+k;
+                //     printf("total: (%f %f)\n\n", vel[ind](0), vel[ind](1));
+                // }
             }
         }
     }
-	for(int i = 0; i < res[0]; i++) {
-		for(int j = 0; j < res[1]; j++) {
-            int index = i*res[1]+j;
-            if(mass[index] < EPS) {
-                velocity[index] = VectorN(0.0, 0.0);
-                // valid[index] = 0;
-                mass[index] = 0;
+    // std::ofstream weightout("./euler/Weights");
+    double maxout = 0;
+    double minin = 10000;
+    for(auto ind : indexToWeight) {
+        // weightout << ind.first << ": " << ind.second << "\n";
+        if(valid[ind.first]) {
+            minin = std::min(minin, ind.second);
+        }
+        else {
+            maxout = std::max(maxout, ind.second);
+        }
+        // if(mass[ind.first] > EPS) {
+        if(ind.second > 3) {
+            velocity[ind.first] = vel[ind.first] / mass[ind.first];
+            // if(ind.first == 47*res[1]+29) {
+            //     printf("(%f %f) = (%f %f) / %f\n", velocity[ind.first](0), velocity[ind.first](1), vel[ind.first](0), vel[ind.first](1), mass[ind.first]);
+            // }
+            mass[ind.first] = 1;
+        }
+    }
+    // weightout.close();
+    // printf("Min Valid: %f\n", minin);
+    // printf("Max Invalid: %f\n", maxout);
+
+	// for(int i = 0; i < res[0]; i++) {
+	// 	for(int j = 0; j < res[1]; j++) {
+    //         int index = i*res[1]+j;
+    //         if(mass[index] < EPS) {
+    //             velocity[index] = VectorN(0.0, 0.0);
+    //             // valid[index] = 0;
+    //             mass[index] = 0;
+    //         }
+    //         else {
+    //             velocity[index] /= mass[index];
+    //             // valid[index] = 1;
+    //         }
+    //         #ifndef NDEBUG
+    //         if(velocity[index].hasNaN()) {
+    //             printf("interpolated vel NaN at (%d, %d)\n", i, j);
+    //             std::cout << velocity[index] << std::endl;
+    //             exit(0);
+    //         }
+    //         #endif
+    //     }
+	// }
+}
+
+void World::apicp2g2() {
+    MatrixN tmpDinv = (3.0/(h*h))*MatrixN::Identity();
+    std::unordered_map<int, std::tuple<VectorN, double, double> > indexToWeight;
+    #pragma omp parallel
+    {
+    std::unordered_map<int, std::tuple<VectorN, double, double> > localMap;
+    #pragma omp parallel for schedule(static)
+    for(size_t i = 0; i < matParticles.size(); i++) {
+        Particle &p = matParticles[i];
+        double x = (p.x(0) - origin(0)) / h;
+        double y = (p.x(1) - origin(1)) / h;
+        int i = std::floor(x) - 1;
+        int j = std::floor(y) - 1;
+        MatrixN Dinv = MatrixN::Zero();
+        for(int s = i; s < i+4; s++) {
+            for(int t = j; t < j+4; t++) {
+                if(s < 0 || t < 0 || s > res[0]-1 || t > res[1]-1) {
+                    continue;
+                }
+                VectorN diff = (1.0/h) * (p.x - origin);
+                diff -= VectorN(s, t);
+                VectorN n(0, 0);
+                for(int k = 0; k < DIM; k++) {
+                    if(std::abs(diff(k)) < 1) {
+                        n(k) = 0.5*std::abs(std::pow(diff(k), 3)) - diff(k)*diff(k) + 2.0/3.0;
+                    }
+                    else if(std::abs(diff(k)) < 2) {
+                        n(k) = -1.0/6.0*std::abs(std::pow(diff(k), 3)) + diff(k)*diff(k) - 2*std::abs(diff(k)) + 4.0/3.0;
+                    }
+                }
+                double w = n(0) * n(1);
+                VectorN xg = origin + h*VectorN(s, t);
+                VectorN xixp = xg - p.x;
+                Dinv += w * xixp * xixp.transpose();
+            }
+        }
+        VectorN mv = p.m*p.v;
+        // if(Dinv.determinant() < 1e-12) {
+        //     printf("Singular D: %f\n", Dinv.determinant());
+        // }
+        // MatrixN mBD = p.m*p.B*Dinv.inverse();
+        MatrixN mBD = p.m*p.B*tmpDinv;
+        for(int s = i; s < i+4; s++) {
+            for(int t = j; t < j+4; t++) {
+                if(s < 0 || t < 0 || s > res[0]-1 || t > res[1]-1) {
+                    continue;
+                }
+                VectorN diff = (1.0/h) * (p.x - origin);
+                diff -= VectorN(s, t);
+                VectorN n(0, 0);
+                for(int k = 0; k < DIM; k++) {
+                    if(std::abs(diff(k)) < 1) {
+                        n(k) = 0.5*std::abs(std::pow(diff(k), 3)) - diff(k)*diff(k) + 2.0/3.0;
+                    }
+                    else if(std::abs(diff(k)) < 2) {
+                        n(k) = -1.0/6.0*std::abs(std::pow(diff(k), 3)) + diff(k)*diff(k) - 2*std::abs(diff(k)) + 4.0/3.0;
+                    }
+                }
+                double w = n(0) * n(1);
+                int index = s*res[1]+t;
+                VectorN xg = origin + h*VectorN(s, t);
+                VectorN update = w * (mv + mBD*(xg-p.x));
+                if(localMap.find(index) == localMap.end()) {
+                    std::get<0>(localMap[index]) = update;
+                    std::get<1>(localMap[index]) = w*p.m;
+                    std::get<2>(localMap[index]) = w;
+                }
+                else {
+                    std::get<0>(localMap[index]) += update;
+                    std::get<1>(localMap[index]) += w*p.m;
+                    std::get<2>(localMap[index]) += w;
+                }
+            }
+        }
+    }
+    #pragma omp barrier
+    #pragma omp critical
+    {
+        for(auto iToW : localMap) {
+            if(indexToWeight.find(iToW.first) == indexToWeight.end()) {
+                indexToWeight[iToW.first] = iToW.second;
             }
             else {
-                velocity[index] /= mass[index];
-                // valid[index] = 1;
+                std::get<0>(indexToWeight[iToW.first]) += std::get<0>(iToW.second);
+                std::get<1>(indexToWeight[iToW.first]) += std::get<1>(iToW.second);
+                std::get<2>(indexToWeight[iToW.first]) += std::get<2>(iToW.second);
             }
-            #ifndef NDEBUG
-            if(velocity[index].hasNaN()) {
-                printf("interpolated vel NaN at (%d, %d)\n", i, j);
-                std::cout << velocity[index] << std::endl;
-                exit(0);
-            }
-            #endif
         }
-	}
+    }
+    }
+    mass.clear();
+    int cutoff = 3;
+    for(auto iToW : indexToWeight) {
+        if(std::get<2>(iToW.second) < cutoff) {
+            continue;
+        }
+        velocity[iToW.first] = std::get<0>(iToW.second) / std::get<1>(iToW.second);
+        mass[iToW.first] = 1;
+    }
 }
 
 /************************
