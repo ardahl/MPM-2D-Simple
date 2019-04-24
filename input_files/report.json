@@ -1,0 +1,27 @@
+{
+    "steps" : 250000,
+	"totalTime" : 5,
+	"objects" : [
+		{
+			"type" : "parts",
+			"filename" : "parts/report.bgeo"
+		}
+	],
+	"grid" : {
+		"origin" : [-0.5, 0.0],
+		"size" : [41, 41],
+		"h" : 0.025
+	},
+	"lame" : [0, 1.0e3],
+	"massPropDamp" : 0.99999999,
+	//"massPropDamp" : 1.0,
+	"gravity" : [0.0, 0.0]
+
+    //Particle Properties
+    //Center: (0,.5)
+    //Radius: (0.15,0.15)
+    //Resolution: (100,100)
+    //Particle Mass: 0.001
+    //Velocity: Rotation with 0.75 scale
+    //Jittered by 0.25 of cell size (0.025)
+}
