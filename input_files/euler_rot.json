@@ -2,13 +2,17 @@
     "testVel" : 0,
 	//500,000
 	//"dt" : 6.66666667e-8,
-	"steps" : 20000,
-	"totalTime" : 3,
+	"steps" : 10,
+	"totalTime" : 2,
 	//Not actually used, but particles might be needed for visualization so they're staying for now
 	"objects" : [
 		{
-			"type" : "parts",
-			"filename" : "parts/disc_jitter.bgeo"
+			"lame" : [5000, 10000],
+            "density" : 1000,
+            "plasticYield" : -1,
+            "pmass" : 1000,
+            "size" : [0.15, 0.15],
+            "center" : [0, 0]
 		}
 	],
 	"grid" : {
@@ -20,10 +24,8 @@
 		//"h" : 0.015,
 		"end" : [0.3, 0.3]
 	},
- 	"mass" : 1.0,
-    "lame" : [5000, 10000],
-    /* "lame" : [400000, 1000000], */
-	"massPropDamp" : 1.0
+    "lame" : [500, 1000]
+	/* "massPropDamp" : 1.0 */
 	//"gravity" : [0.0, -9.8]
 	//"rotate" : 0.05
 }

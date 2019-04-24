@@ -20,7 +20,7 @@ public:
 class Particle {
 public:
     //Temp
-    MatrixN B;         //B matrix from APIC paper
+    MatrixN B, Bu, Bdisp;         //B matrix from APIC paper
 
     VectorN u;        //Initial position (rest state)
     VectorN x, v;      //postition, velocity
@@ -34,7 +34,7 @@ public:
     double vol;                //volume
 
     Particle(VectorN x, VectorN v, Eigen::Vector3d color, double m):
-	  B(MatrixN::Zero()), u(x), x(x), v(v), color(color), gradientE(MatrixN::Identity()), gradientP(MatrixN::Identity()), f(VectorN::Zero()), m(m), rho(0.0), vol(0.0) {}
+	  B(MatrixN::Zero()), Bu(MatrixN::Zero()), Bdisp(MatrixN::Zero()), u(x), x(x), v(v), color(color), gradientE(MatrixN::Identity()), gradientP(MatrixN::Identity()), f(VectorN::Zero()), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
@@ -119,9 +119,10 @@ public:
     //Mostly for testing purposes right now
     #ifndef NDEBUG
     VectorN **matTrans;
-    int count, sMax, inc;
+    int count, sMax;
     std::vector<char> val;
     #endif
+    int inc;
 
   benlib::Profiler prof;
 };

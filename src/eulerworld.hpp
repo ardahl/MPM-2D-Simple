@@ -6,115 +6,195 @@
 #include <algorithm>
 #include <fstream>
 #include "profiler.hpp"
-#define MAT_EXTRAP
-class Particle;
 
 class Particle {
 public:
     //Temp
-    Eigen::Matrix2d B;         //B matrix from APIC paper
+    MatrixN B;         //B matrix from APIC paper
 
-    Eigen::Vector2d x, v, vo;      //postition, velocity
+    VectorN x, v, xo, vo, u;      //postition, velocity
     Eigen::Vector3d color;
     double m;                  //mass
     double rho;                //density
     double vol;                //volume
 
-    Particle(Eigen::Vector2d x, Eigen::Vector2d v, Eigen::Vector3d color, double m):
+    Particle(VectorN x, VectorN v, Eigen::Vector3d color, double m):
 	  B(Eigen::Matrix2d::Zero()), x(x), v(v), color(color), m(m), rho(0.0), vol(0.0) {}
     Particle() {}
 };
 
-struct MaterialProps {
-    double lambda, mu;                  //Lame Constants for stress
-    double compression;                 //critical compression (sec. 5 of stomahkin)
-    double stretch;                     //critical stretch (sec. 5 of stomahkin)
-    double massPropDamp, mass, pmass, alpha;
+class Corotation {
+public:
+    Corotation(double lambda, double mu);
+    void init(const MatrixN& F);
+    void svd(const MatrixN& F, MatrixN& U, MatrixN& Fhat, MatrixN& V);
+    MatrixN firstPiolaKirchhoff();
+    MatrixN firstPKDifferential(const MatrixN& dF);
+    #if DIM == 3
+    MatrixN crossMatrix(const VectorN& vec);
+    #endif
+    Corotation* copy();
+
+    double lambda, mu;
+    //From SVD of F
+    MatrixN R, S, L, U, Fhat, V;
 };
 
-struct Object {
-    MaterialProps mp;
-    Eigen::Vector3d color;
-    std::string type;
-    double size[2];
-    int ores[2];
-    Eigen::Vector2d object, center;
-    std::vector<Particle> particles;
-};
+class Object {
+public:
+    std::vector<VectorN> X;
+    std::vector<VectorN> u;
+    std::vector<VectorN> vecWorkspace, matWorkspace;
+    int offsets[QUAD];
 
+    Corotation* solidMaterial;
+    std::vector<Corotation*> materialCopies;
+    double lambda, mu;
+
+    int res[DIM];
+    double size[DIM];
+    double dh, dhInv;
+    VectorN origin;
+    std::vector<double> restMass;
+    std::vector<MatrixN> FpInvVec;
+    VectorI tightMax;
+    VectorI tightMin;
+    int xmin, xmax;
+    int ymin, ymax;
+    std::vector<int> activeCells;
+    std::vector<int> gridToActiveCell;
+    SparseMat systemMatrix;
+
+    double subsampleDh;
+    double quarterCellSolidMass;
+    double dt;
+    int totalCells;
+    std::vector<char> valid;
+    std::vector<double> phi;
+    std::vector<double> mass;
+
+    VectorX quarterVolumeFractions;
+    std::vector<double> workspace;
+    std::vector<VectorN> velocity;
+    VectorX mv;
+    VectorX unitForce;
+    bool isPlastic;
+    double plasticYield;
+
+    VectorX velocityAtDt0;
+    VectorX velocityAtDt1;
+    VectorX gradient;
+    VectorX constraintObjective;
+    double objective;
+
+    std::vector<double> detFInv;
+    MatrixX G;
+    std::vector<Particle> matParticles;
+    std::vector<Particle> vertices;
+    int testVel;
+    double scale;
+    VectorN center;
+    bool verticesInit;
+
+    Object(int resolution[DIM], double dh, VectorN origin, const std::vector<double>& restMass);
+    void setTestVel(int v) { testVel = v; }
+    void setInitialState();
+    void setInitialVelocity();
+    void setMaterial(double lambda, double mu);
+    void setPlasticYield(double v) {
+        isPlastic = true;
+        plasticYield = v;
+    }
+    void setMassDensity(double density) {
+        quarterCellSolidMass = density * dh * dh * 0.25;
+    }
+
+    void init();
+    void computeSolidMass(bool usesdf=false);
+    void computeSDF();
+    void initMaterialParticles();
+    void recoverVelocityField(std::vector<VectorN>& v);
+    void finalizeSolution(std::vector<VectorN>& vel, double step);
+    void extendVectorField();
+    void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);
+    void velSweep(std::vector<Eigen::Vector2d>& vel, const std::vector<double>& field, int iters, double eps);
+    void finalizeSolution();
+    void advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace, double dt);
+    void advectSurface();
+
+    void computeKf(VectorX& force, std::vector<Tripletd>& tripletList, const std::vector<int>& indexMap);
+    double computeF(const MatrixX& coord, const MatrixX& pNpF, MatrixN& F);
+    void computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxhat);
+    void computeMV(VectorX mv, const std::vector<int>& indexMap);
+
+    //Base version from paper
+    void gridToParticles();
+    void particlesToGrid();
+
+    template <class F>
+    F interpolate_value(const VectorN& point, std::vector<F> field, VectorN origin, int res[DIM], double dh);
+    MatrixN interpolate_value(const std::vector<MatrixN>& data, const VectorN& point, int& index, VectorN origin, int res[DIM], double dh);
+};
 
 class World {
 public:
     int stepNum, steps;
     double elapsedTime, dt, totalTime;
     std::string filename;
-    Eigen::Vector2d origin;                 //lower left node position
+    VectorN origin;                 //lower left node position
     int res[DIM];                             //Grid node dimensions
-    double h;                               //Grid node spacing
-    VectorI tightMax;
-    VectorI tightMin;
-    int xmin, xmax;
-    int ymin, ymax;
-    std::vector<Object> objects;
-
-    std::vector<double> restMass;
-    int offsets[QUAD];
-    MatrixX G;
-    //Structures used for calculations
+    double dh, dhInv;                               //Grid node spacing
     int totalCells;
     int totalSolidCells;
     int totalActiveCells;
-    std::vector<VectorN> X;                 //material coordinates
-    std::vector<VectorN> u;                 //displacements of each coordinate to their current location
-    std::vector<double> mass;
+    int offsets[QUAD];
+
+    std::vector<Object*> solids;
+
     std::vector<VectorN> velocity;
-    std::vector<char> valid;
     std::vector<VectorN> vecWorkspace;
-    std::vector<double> phi;
-    std::vector<double> detFInv;
-    double subsampleDh;
-    double quarterCellSolidMass;
-    VectorX vStar;                           //updated velocity from forces solve
-    VectorX solidMv;
-    VectorX solidUnitForce;
-    VectorX dampedMass;
+    VectorX mv, solidMv;
+    VectorX unitForce, solidUnitForce;
+    double rayleighAlpha, rayleighBeta;
+    VectorX dampedSolidMass;
+    VectorX nzMassVec, nzMassVecInv;
+    std::vector<double> solidMass;
+    std::vector<double> nodeSolidVolumeFraction;
+    VectorX quarterSolidVolumeFractions;
     std::vector<int> gridToSolution;
     std::vector<int> gridToSolid;
-    std::vector<ETriplet> tripletList;
-    double mu;
-    double lambda;
-    double rayleighAlpha;
-    double rayleighBeta;
-    VectorX quarterVolumeFractions;
-    std::vector<double> nodeSolidVolumeFraction;
-    std::vector<Particle> matParticles;
-    //From SVD of F
-    //These are all used at the same time and nowhere else, no need for an array
-    MatrixN R;
-    MatrixN S;
-    MatrixN L;
-    MatrixN U;
-    MatrixN Fhat;
-    MatrixN V;
-    SparseMat systemMat;
+    VectorX velocityAtDt0;
+    VectorX velocityAtDt1;
+    VectorX pressureCorrection;
+    VectorX solidVelocityAtDt0;
+    VectorX solidVelocityAtDt1;
+    VectorX solidPressureCorrection;
+    SparseMat systemMatrix;
     VectorX systemMatDiag;
+    SparseMat JT;
+    SparseMat JMInvJT;
+    VectorX JMInvJTDiag;
+    std::vector<std::vector<std::pair<int, double> > > JJTDiagEntries;
+    double fluidDensity;
+    double fluidViscocity;
+    SparseMat divergenceConstraintJacobian;
+    VectorX divergenceConstraintsRHS;
+    std::vector<double> intensity;
+    std::vector<double> workspace;
+    double bouyancy;
 
     //PCR
     VectorX q, s, Ap, tmp, residual, direction;
 
-    //Color for Rendering
-    std::vector<Eigen::Vector3d> color;
-
     // external forces
     VectorN gravity;
     double rotation;
-    bool rotationEnabled, gravityEnabled, plasticEnabled;
+    bool rotationEnabled, gravityEnabled;
     VectorN center;
 
     #ifndef NDEBUG
     VectorN **matTrans;
     int count, sMax;
-    std::vector<Particle> particles;
     #endif
     int inc;
 
@@ -122,39 +202,28 @@ public:
     World(std::string config);
     ~World();
     //Functions
-    void init();                            //Do any configurations
+    void init();
     //Perform a step of length dt
     void step();
-    void computeKf();
-    void computeMV();
+    void computeDivergenceConstraintRHS();
     void pcrImplicit();
     void finalizeSolution();
 
-    double computeF(const MatrixX& coord, const MatrixX& pNpF, MatrixN& F);
-    void materialInit(const MatrixN& F);
-    void svd(const MatrixN& F, MatrixN& U, MatrixN& Fhat, MatrixN& V);
-    MatrixN firstPiolaKirchhoff();
-    MatrixN firstPKDifferential(const MatrixN& dF);
-    void computePFPxhat(const MatrixN& F, const MatrixX& pNpx, MatrixX& pFpxhat);
-    bool solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M);
-    void parallelMatVec(const SparseMat& A, const VectorX& b, VectorX& x);
-    void computeSDF();
-    void advectField(std::vector<VectorN>& field, std::vector<VectorN>& workspace);
-    void computeSolidMass(bool usesdf=false);
     void gatherSolidMasses();
-    MatrixN crossMatrix(const VectorN& vec);
-    //Base version from paper
-    void gridToParticles();
-    void particlesToGrid();
+    void computeDivergenceConstraintJacobian();
+    bool solvePCR(const SparseMat& A, const VectorX& b, VectorX& x, const VectorX& M);
+    bool solvePCRDivFree(const VectorX& b, VectorX& x, const VectorX& precond);
+    void parallelMatVec(const SparseMat& A, const VectorX& b, VectorX& x);
+    void getMatVecMult(const VectorX& input, VectorX& output);
+    void advectFluidVelocityField(std::vector<VectorN>& workspace, double dt);
+    void advectField(std::vector<double>& field, std::vector<double>& workspace, double dt);
+
     //Apic version for testing
     void apicg2p();
     void apicp2g();
-    void apicg2p2();
-    void apicp2g2();
+    void apicAdvect();
 
     //Helpers
-    void distSweep(std::vector<double>& field, const std::vector<char>& initial, int iters, double eps);
-    void velSweep(std::vector<Eigen::Vector2d>& vel, const std::vector<double>& field, int iters, double eps);
     void sweepAve(Eigen::Vector2d *vel, int iters);
 
     benlib::Profiler prof;

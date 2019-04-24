@@ -11,6 +11,13 @@
 //For matrix sqrt(), used for polar decomposition
 #include <unsupported/Eigen/MatrixFunctions>
 
+// Regular MPM or testing material transfer
+#define MAT_TRANSFER
+// Splotting material differences or material coordiantes
+#define DIFF
+// Whether to do APIC mat transfer
+#define APIC_MAT
+
 using namespace Eigen;
 using benlib::range;
 
@@ -348,9 +355,10 @@ World::World(std::string config) {
 
     inc = steps;
     #ifndef NDEBUG
-    inc = 1000;
+    // inc = 125000;
+    inc = 2000;
     count = 0;
-    sMax = 11;
+    sMax = 31;
     matTrans = new VectorN*[sMax];
     for(int i = 0; i < sMax; i++) {
         matTrans[i] = new VectorN[res[0]*res[1]];
@@ -748,6 +756,11 @@ void World::particleVolumesDensities() {
 void World::step() {
     #ifndef NDEBUG
     if(stepNum == 0) {
+        std::ostringstream ss;
+        ss << std::setw(2) << std::setfill('0') << 0 << "." << std::setw(6)<< 0;
+        std::string pframe(ss.str());
+        std::string parOut = "mat/particles-" + pframe + ".bgeo";
+        writeParticles(parOut.c_str(), objects[0].particles);
         for(int i = 0; i < res[0]; i++) {
             for(int j = 0; j < res[1]; j++) {
                 matTrans[count][i*res[1]+j] = mat[i*res[1]+j];
@@ -796,8 +809,14 @@ void World::step() {
                 }
             }
             mats.close();
+            printf("\nExiting Debug\n");
             std::exit(0);
         }
+        std::ostringstream ss;
+        ss << std::setw(2) << std::setfill('0') << 0 << "." << std::setw(6)<< stepNum/inc;
+        std::string pframe(ss.str());
+        std::string parOut = "mat/particles-" + pframe + ".bgeo";
+        writeParticles(parOut.c_str(), objects[0].particles);
     }
     #endif
 }
@@ -823,6 +842,8 @@ void World::particlesToGrid() {
     auto timer = prof.timeName("particlesToGrid");
     vel = std::vector<VectorN>(res[0]*res[1], VectorN::Zero());
     mass = std::vector<double>(res[0]*res[1], 0);
+    mat = std::vector<VectorN>(res[0]*res[1], VectorN::Zero());
+    matdiff = std::vector<VectorN>(res[0]*res[1], VectorN::Zero());
 
     MatrixN tmpD = ((h*h)/3.0)*MatrixN::Identity();
     MatrixN tmpDinv = (3.0/(h*h))*MatrixN::Identity();
@@ -833,8 +854,8 @@ void World::particlesToGrid() {
             Particle &p = particles[i];
             if(stepNum == 0) {
                 MatrixN C;
-                // C << 0, -0.75, 0.75, 0; //Rotational (rotation=0.75) Case
-                C << 0, 0, 0, 0;
+                C << 0, -0.75, 0.75, 0; //Rotational (rotation=0.75) Case
+                // C << 0, 0, 0, 0;
                 p.B = C * tmpD;
             }
             VectorN offset = (p.x - origin) / h;
@@ -847,19 +868,34 @@ void World::particlesToGrid() {
                     int index = j*res[1] + k;
                     double w = w1*weight(offset(1) - k);
                     mass[index] += w * p.m;
+                    #ifndef APIC_MAT
                     mat[index] += w * p.u;
                     matdiff[index] += w * (p.x - p.u);
+                    #endif
                     weights[index] += w;
                 }
             }
             VectorN mv = p.m*p.v;
             MatrixN mBD = p.m*p.B*tmpDinv;
+            #ifdef APIC_MAT
+            VectorN mu = p.m*p.u;
+            MatrixN mBuD = p.m*p.Bu*tmpDinv;
+            VectorN mdisp = p.m*(p.x-p.u);
+            MatrixN mBdispD = p.m*p.Bdisp*tmpDinv;
+            #endif
             for(int j = xbounds[0]; j < xbounds[1]; j++) {
                 double w1 = weight(offset(0) - j);
                 for(int k = ybounds[0]; k < ybounds[1]; k++) {
                     double w = w1*weight(offset(1) - k);
                     VectorN xg = origin + h*VectorN(j, k);
                     vel[j*res[1] + k] += w * (mv + mBD*(xg-xp).eval());
+                    #ifdef APIC_MAT
+                    int index = j*res[1] + k;
+                    mat[index] += w * (mu + mBuD*(xg-xp));
+                    matdiff[index] += w * (mdisp + mBdispD*(xg-xp));
+                    // mat[index] += w * (mu + mBD*(xg-xp));
+                    // matdiff[index] += w * (mdisp + mBD*(xg-xp));
+                    #endif
                 }
             }
         }
@@ -871,19 +907,28 @@ void World::particlesToGrid() {
                 vel[index] = VectorN(0.0, 0.0);
                 valid[index] = 0;
                 mass[index] = 0;
-            }
-            else {
-                vel[index] /= mass[index];
-                valid[index] = 1;
-            }
-            if(weights[index] < EPS) {
                 mat[index] = VectorN::Zero();
                 matdiff[index] = VectorN::Zero();
             }
             else {
+                vel[index] /= mass[index];
+                valid[index] = 1;
+                #ifndef APIC_MAT
                 mat[index] /= weights[index];
                 matdiff[index] /= weights[index];
+                #else
+                mat[index] /= mass[index];
+                matdiff[index] /= mass[index];
+                #endif
             }
+            // if(weights[index] < EPS) {
+            //     mat[index] = VectorN::Zero();
+            //     matdiff[index] = VectorN::Zero();
+            // }
+            // else {
+            //     mat[index] /= weights[index];
+            //     matdiff[index] /= weights[index];
+            // }
             #ifndef NDEBUG
             if(vel[index].hasNaN()) {
                 printf("interpolated vel NaN at (%d, %d)\n", i, j);
@@ -894,41 +939,55 @@ void World::particlesToGrid() {
         }
 	}
     #ifndef NDEBUG
-    debug << "Material Coordinates:\n";
-    for(int j = res[1]-1; j >= 0; j--) {
-        for(int i = 0; i < res[0]; i++) {
-            int index = i*res[1]+j;
-            debug << "(";
-            if(matdiff[index](0) < 0) {
-                debug << std::fixed << std::setprecision(5) << matdiff[index](0);
+    if(stepNum % inc == 0) {
+        debug << "Material Coordinates:\n";
+        for(int j = res[1]-1; j >= 0; j--) {
+            for(int i = 0; i < res[0]; i++) {
+                int index = i*res[1]+j;
+                debug << "(";
+                if(matdiff[index](0) < 0) {
+                    debug << std::fixed << std::setprecision(5) << matdiff[index](0);
+                }
+                else {
+                    debug << std::fixed << std::setprecision(6) << matdiff[index](0);
+                }
+                debug << ",";
+                if(matdiff[index](1) < 0) {
+                    debug << std::fixed << std::setprecision(5) << matdiff[index](1);
+                }
+                else {
+                    debug << std::fixed << std::setprecision(6) << matdiff[index](1);
+                }
+                debug << ") ";
             }
-            else {
-                debug << std::fixed << std::setprecision(6) << matdiff[index](0);
-            }
-            debug << ",";
-            if(matdiff[index](1) < 0) {
-                debug << std::fixed << std::setprecision(5) << matdiff[index](1);
-            }
-            else {
-                debug << std::fixed << std::setprecision(6) << matdiff[index](1);
-            }
-            debug << ") ";
+            debug << "\n";
         }
-        debug << "\n";
+        std::ofstream materr(std::string("mat/materror-")+std::to_string(stepNum/inc));
+        for(int i = 0; i < res[0]; i++) {
+            for(int j = 0; j < res[1]; j++) {
+                int ind = i*res[1]+j;
+                if(!valid[ind]) {
+                    continue;
+                }
+                VectorN xg = origin + h*VectorN(i, j);
+                // materr << xg(0) << " " << xg(1) << " " << mat[ind](0)-xg(0) << " " << mat[ind](1)-xg(1) << "\n";
+                #ifndef DIFF
+                materr << xg(0) << " " << xg(1) << " 0\n";
+                materr << mat[ind](0) << " " << mat[ind](1) << " 1\n\n\n";
+                #else
+                materr << xg(0) << " " << xg(1) << " 0\n";
+                materr << xg(0)+mat[ind](0) << " " << xg(1)+mat[ind](1) << " 1\n\n\n";
+                #endif
+            }
+        }
+        // std::vector<Particle> &particles = objects[0].particles;
+        // for(size_t i = 0; i < particles.size(); i++) {
+        //     Particle &p = particles[i];
+        //     materr << p.x(0) << " " << p.x(1) << " 0\n";
+        //     materr << p.u(0) << " " << p.u(1) << " 1\n\n\n";
+        // }
+        materr.close();
     }
-    // std::ofstream materr(std::string("mat/materror-")+std::to_string(stepNum/inc));
-    // for(int i = 0; i < res[0]; i++) {
-    //     for(int j = 0; j < res[1]; j++) {
-    //         int ind = i*res[1]+j;
-    //         if(!valid[ind]) {
-    //             continue;
-    //         }
-    //         VectorN xg = origin + h*VectorN(i, j);
-    //         materr << xg(0) << " " << xg(1) << " 0\n";
-    //         materr << mat[ind](0) << " " << mat[ind](1) << " 1\n\n\n";
-    //     }
-    // }
-    // materr.close();
     #endif
 }
 
@@ -2128,9 +2187,9 @@ void World::velExtrapolate() {
             debug << "\n";
         }
         debug << "\n";
-        if(stepNum == 10*inc) {
-            std::exit(0);
-        }
+        // if(stepNum == 10*inc) {
+        //     std::exit(0);
+        // }
     }
     #endif
 }
@@ -2262,6 +2321,10 @@ void World::gridToParticles() {
             Particle &p = particles[i];
             //Update velocities
             p.B = MatrixN::Zero();
+            #ifdef APIC_MAT
+            p.Bu = MatrixN::Zero();
+            p.Bdisp = MatrixN::Zero();
+            #endif
             VectorN apic = VectorN::Zero();
             VectorN offset = (p.x - origin) / h;
             int xbounds[2], ybounds[2];
@@ -2272,12 +2335,17 @@ void World::gridToParticles() {
                     double w = w1*weight(offset(1) - k);
                     int index = j*res[1] + k;
                     if(!valid[index]) {
-                        printf("Particle grabbing outside\n");
+                        // printf("Particle grabbing outside\n");
+                        continue;
                     }
                     VectorN xg = origin + h*VectorN(j, k);
                     VectorN wvel = w * velStar[index];
                     apic += wvel;
                     p.B += wvel * (xg - p.x).transpose();
+                    #ifdef APIC_MAT
+                    p.Bu += w * mat[index] * (xg - p.x).transpose();
+                    p.Bdisp += w * matdiff[index] * (xg - p.x).transpose();
+                    #endif
                 }
             }
             #ifndef NDEBUG
@@ -2424,6 +2492,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	Partio::ParticleAttribute geattr;
 	Partio::ParticleAttribute gpattr;
 	Partio::ParticleAttribute cattr;
+    Partio::ParticleAttribute cattr2;
 	Partio::ParticleAttribute mattr;
 	Partio::ParticleAttribute rattr;
 	Partio::ParticleAttribute vattr;
@@ -2436,7 +2505,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->addAttribute("B", Partio::VECTOR, 4);
 	data->addAttribute("gradientE", Partio::VECTOR, 4);
 	data->addAttribute("gradientP", Partio::VECTOR, 4);
-	data->addAttribute("color", Partio::VECTOR, 3);
+	data->addAttribute("Cd", Partio::VECTOR, 3);
+    data->addAttribute("color", Partio::VECTOR, 3);
 	data->addAttribute("mass", Partio::FLOAT, 1);
 	data->addAttribute("rho", Partio::FLOAT, 1);
 	data->addAttribute("vol", Partio::FLOAT, 1);
@@ -2447,7 +2517,8 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 	data->attributeInfo("B", battr);
 	data->attributeInfo("gradientE", geattr);
 	data->attributeInfo("gradientP", gpattr);
-	data->attributeInfo("color", cattr);
+	data->attributeInfo("Cd", cattr);
+    data->attributeInfo("color", cattr2);
 	data->attributeInfo("mass", mattr);
 	data->attributeInfo("rho", rattr);
 	data->attributeInfo("vol", vattr);
@@ -2461,6 +2532,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		float *ge = data->dataWrite<float>(geattr, i);
 		float *gp = data->dataWrite<float>(gpattr, i);
 		float *c = data->dataWrite<float>(cattr, i);
+        float *c2 = data->dataWrite<float>(cattr2, i);
 		float *m = data->dataWrite<float>(mattr, i);
 		float *r = data->dataWrite<float>(rattr, i);
 		float *v = data->dataWrite<float>(vattr, i);
@@ -2472,6 +2544,7 @@ void writeParticles(const char *fname, const std::vector<Particle> &particles) {
 		ge[0] = p.gradientE(0,0), ge[1] = p.gradientE(0,1), ge[2] = p.gradientE(1,0), ge[3] = p.gradientE(1,1);
 		gp[0] = p.gradientP(0,0), gp[1] = p.gradientP(0,1), gp[2] = p.gradientP(1,0), gp[3] = p.gradientP(1,1);
 		c[0] = p.color(0), c[1] = p.color(1), c[2] = p.color(2);
+        c2[0] = p.color(0), c2[1] = p.color(1), c2[2] = p.color(2);
 		m[0] = p.m;
 		r[0] = p.rho;
 		v[0] = p.vol;
@@ -2502,7 +2575,7 @@ bool readParticles(const char *fname, std::vector<Particle> &particles) {
 	bool B = data->attributeInfo("B", battr);
 	bool gradientE = data->attributeInfo("gradientE", geattr);
 	bool gradientP = data->attributeInfo("gradientP", gpattr);
-	bool color = data->attributeInfo("color", cattr);
+	bool color = data->attributeInfo("Cd", cattr);
 	bool mass = data->attributeInfo("mass", mattr);
 	bool rho = data->attributeInfo("rho", rattr);
 	bool vol = data->attributeInfo("vol", vattr);

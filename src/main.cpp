@@ -7,7 +7,7 @@
 #include <iomanip>
 
 using namespace Eigen;
-#define SLOMO
+// #define SLOMO
 
 #ifndef NDEBUG
 extern std::ofstream debug;

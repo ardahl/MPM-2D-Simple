@@ -13,13 +13,14 @@
 #include <Eigen/Sparse>
 
 // Regular MPM or testing material transfer
-#define MAT_TRANSFER
+// #define MAT_TRANSFER
 // Splotting material differences or material coordiantes
-#define DIFF
+// #define DIFF
 // Velocity extrapolation by fast sweeping or simple average
 #define FASTSWEEP
 // Use APIC for velocity transfer
 #define APICVEL
+#define APICADVECT
 
 /// Currently the value of what's close enough to 0 to round down to 0 for
 /// numerical calculation purposes. This may be a function of the grid later
@@ -47,6 +48,6 @@ typedef Eigen::VectorXd VectorX;
 typedef Eigen::MatrixXd MatrixX;
 typedef Eigen::ArrayXd ArrayX;
 typedef Eigen::SparseMatrix<double, Eigen::RowMajor> SparseMat;
-typedef Eigen::Triplet<double> ETriplet;
+typedef Eigen::Triplet<double> Tripletd;
 
 #endif

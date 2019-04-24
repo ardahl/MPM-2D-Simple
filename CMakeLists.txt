@@ -10,21 +10,24 @@ if( NOT CMAKE_BUILD_TYPE )
 	set( CMAKE_BUILD_TYPE Release )
 endif()
 #Uncomment line below to still use O3 optimization with debugging
-set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -g -Wno-int-in-bool-context")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-int-in-bool-context -Wno-deprecated-declarations" )
+set(CMAKE_CXX_FLAGS_DEBUG "-O3 -g -Wno-unknown-pragmas")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wno-deprecated-declarations -Wno-unknown-pragmas" )
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DINFO")
 
 message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
-#  Option for if it is building on a cluster or not
+# Option for if it is building on a cluster or not
 # only used to change where the output is stored
 option(Cluster "Cluster" OFF)
 if (Cluster)
     add_definitions(-DCLUSTER)
     message(STATUS "Building for cluster")
 endif()
+
+# Option for whether to compile with multithreading
+option(OMP "OMP" OFF)
 
 #Source directory
 set( SRC "src")
@@ -55,10 +58,13 @@ find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
 
 # OpenMP
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+if (OMP)
+    find_package(OpenMP)
+    if (OPENMP_FOUND)
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+        message(STATUS "Compiling with omp multithreading")
+    endif()
 endif()
 
 #set(PARTIO_LIBRARY "partio -L/usr/local/lib")
@@ -145,6 +151,8 @@ endif(SAMPLER)
 #Solid Euler Simulation
 set (SRC_EULER
 	${SRC}/eulerworld.cpp
+    ${SRC}/eulerobject.cpp
+    ${SRC}/eulercorotation.cpp
 	${SRC}/jsoncpp.cpp
 )
 add_library(eulerlib ${SRC_EULER})

@@ -43,18 +43,18 @@ int main(int argc, char** argv) {
     std::string dbout = outfile + std::string(".txt");
     debug.open(dbout.c_str());
 #endif
-	
+
     std::string config = std::string(argv[1]);
     World world(config);
     world.init();
-  
+
 	while (world.elapsedTime < world.totalTime) {
       #ifndef SLOMO
       if (timeSinceLastFrame > 1.0/30.0) {
       #else
       if(frame >= startFrame && frame <= endFrame && iters % slowmoSteps == 0) {
       #endif
-        for (unsigned int obj = 0; obj<world.objects.size(); obj++) {
+        for (unsigned int obj = 0; obj<world.solids.size(); obj++) {
 		  /// std::ostringstream ss;
           #ifndef SLOMO
 		  /// ss << std::setw(2) << std::setfill('0') << obj << "." << std::setw(6)<< frame;
@@ -91,4 +91,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-

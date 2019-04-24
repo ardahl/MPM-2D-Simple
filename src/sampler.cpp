@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     // parameters of the object
     double size[2] = {0.15, 0.15};  //radius of object in x, y directions
     Vector2d object(0.0,0.5);       //position of the object center
-    int ores[2] = {75,75};          //particle resolution for sampling
+    int ores[2] = {100,100};          //particle resolution for sampling
     double pmass = 0.001;             //mass of each particle
     double scale = 0.75;            //velocity scale
     #if RAND
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     double yvel = 0.0;
     //Linear veloctiy v=(x,y)
     //Rotational velocity v=(-y,x)
-    bool centered = true;           //whether linear and rotational velocity uses the center for (0,0)
+    bool centered = true;           //whether linear and rotational velocity uses the center or (0,0)
 
     //Initialize B
     Matrix2d B, C;
@@ -171,8 +171,11 @@ int main(int argc, char* argv[]) {
         }
         Vector3d col(1.0, 0.0, 0.0);
         Vector2d quad = pos - center;
-        if((quad(0) < 0 && quad(1) < 0) || (quad(0) > 0 && quad(1) > 0)) {
+        if(quad(0) < 0 && quad(1) < 0) {
             col = Vector3d(0.0, 1.0, 0.0);
+        }
+        else if(quad(0) > 0 && quad(1) > 0) {
+            col = Vector3d(0.0, 0.0, 1.0);
         }
         Vector2d ph = pos - object;
         if( ((ph(0)*ph(0))/(size[0]*size[0])) + ((ph(1)*ph(1))/(size[1]*size[1])) < 1+EPS) {
@@ -260,7 +263,7 @@ int main(int argc, char* argv[]) {
         parts.push_back(par);
     }
     if(jitter) {
-        Particle par(center, scale*Vector2d(0,0), Vector3d(1,1,0), pmass);
+        Particle par(center, Vector2d(0,0), Vector3d(1,1,0), pmass);
         par.B = B;
         parts.push_back(par);
     }

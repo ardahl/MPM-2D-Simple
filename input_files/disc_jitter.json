@@ -1,6 +1,6 @@
 {
 	//"dt" : 0.000000666666666666,
-	"dt" : 0.000000166666666666,
+    "steps" : 100000,
 	"totalTime" : 4,
 	"objects" : [
 		{
@@ -18,6 +18,6 @@
  	"mass" : 1.0,
 	"lame" : [0, 1.0e4],
 	"massPropDamp" : 0.99999999,
-	//"massPropDamp" : 1.0,	
+	//"massPropDamp" : 1.0,
 	"gravity" : [0.0, 0.0]
 }
